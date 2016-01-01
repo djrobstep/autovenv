@@ -43,7 +43,7 @@ autovenv tries to keep things tidy by storing the virtualenvs it creates under ~
 Installation
 ------------
 
-Simply install with `pip <https://pip.pypa.io>`_::
+Simply install with `pip <https://pip.pypa.io>`_ globally, ie *not* within a virtual environment::
 
     $ pip install autovenv
 
