@@ -16,7 +16,9 @@ NAME = FOLDER_NAME
 setup(
     name=NAME,
     version='0.1.0',
-    description=io.open('README.rst').read(),
+    description='virtualenv with less hassle',
+    url='http://autovenv.readthedocs.org',
+    long_description=io.open('README.rst').read(),
     author='Robert Lechte',
     author_email='robertlechte@gmail.com',
     install_requires=[
