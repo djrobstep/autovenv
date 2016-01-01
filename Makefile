@@ -51,3 +51,13 @@ checkinstall: freshenv1 pipreqs pipeditable freshenv2 pip
 
 docs:
 	cd docs && make html
+
+testpublish:
+	python setup.py register -r https://testpypi.python.org/pypi
+	python setup.py sdist upload -r https://testpypi.python.org/pypi
+	python setup.py bdist_wheel upload -r https://testpypi.python.org/pypi
+
+publish:
+	python setup.py register
+	python setup.py sdist upload
+	python setup.py bdist_wheel upload

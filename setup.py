@@ -3,7 +3,6 @@
 from __future__ import (absolute_import, division, print_function,
                         unicode_literals)
 import os
-import io
 
 from setuptools import setup, find_packages
 
@@ -15,10 +14,10 @@ NAME = FOLDER_NAME
 
 setup(
     name=NAME,
-    version='0.1.0',
+    version='0.1.1',
     description='virtualenv with less hassle',
     url='http://autovenv.readthedocs.org',
-    long_description=io.open('README.rst').read(),
+    long_description='Virtual environments are great, but they can be a bit annoying to create, manage, and switch between. autovenv takes the annoyance away.\n\nFull documentation is at https://autovenv.readthedocs.org',
     author='Robert Lechte',
     author_email='robertlechte@gmail.com',
     install_requires=[
