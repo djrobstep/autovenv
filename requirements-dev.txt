@@ -1,0 +1,12 @@
+-r requirements.txt
+
+pytest
+pytest-cov
+
+autopep8
+yapf
+flake8
+tox
+
+pathlib
+sphinx
