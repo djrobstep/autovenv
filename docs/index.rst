@@ -50,7 +50,7 @@ Useful Links
 
 Source Code: `github.com/djrobstep/autovenv <https://github.com/djrobstep/autovenv>`_
 
-PyPI package info: `autovenv@PyPI <https://pypi.python.org/pypi/autovenv/0.1.0>`_
+PyPI package info: `autovenv@PyPI <https://pypi.python.org/pypi/autovenv>`_
 
 
 Internals
