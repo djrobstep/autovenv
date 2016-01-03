@@ -21,12 +21,12 @@ Just cd to anywhere within a python project, and autovenv will create a virtual 
 .. code-block:: shell
    :emphasize-lines: 1,6
 
-  alex@xyz:~$ cd pyprojects/skynet
-  AUTOVENV: creating virtual environment: skynet
-  New python executable in /home/alex/.virtualenvs/skynet/bin/python
-  Installing setuptools, pip, wheel...done.
-  Requirement already up-to-date: pip in ...
-  (skynet)alex@xyz:~/pyprojects/skynet$
+    alex@xyz:~$ cd pyprojects/skynet
+    AUTOVENV: creating virtual environment: skynet
+    New python executable in /home/alex/.virtualenvs/skynet/bin/python
+    Installing setuptools, pip, wheel...done.
+    Requirement already up-to-date: pip in ...
+    (skynet)alex@xyz:~/pyprojects/skynet$
 
 cd to a different project, it'll switch virtual environments automatically. cd out of a project and it'll deactivate the virtual environment.
 
@@ -56,6 +56,7 @@ This makes things pretty easy. Let's see:
 So we've built 3.5.1, but our system python is unchanged and still active.
 
 .. code-block:: shell
+
    :emphasize-lines: 1
 
     alex@xyz:~$ autovenv choose 3.5.1
@@ -64,6 +65,7 @@ So we've built 3.5.1, but our system python is unchanged and still active.
 This python will now be used when creating/activating virtual environments:
 
 .. code-block:: shell
+
    :emphasize-lines: 1,4
 
     alex@xyz:~$ cd pyprojects/skynet
