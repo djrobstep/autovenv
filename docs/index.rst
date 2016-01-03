@@ -56,7 +56,6 @@ This makes things pretty easy. Let's see:
 So we've built 3.5.1, but our system python is unchanged and still active.
 
 .. code-block:: shell
-
    :emphasize-lines: 1
 
     alex@xyz:~$ autovenv choose 3.5.1
@@ -65,7 +64,6 @@ So we've built 3.5.1, but our system python is unchanged and still active.
 This python will now be used when creating/activating virtual environments:
 
 .. code-block:: shell
-
    :emphasize-lines: 1,4
 
     alex@xyz:~$ cd pyprojects/skynet
