@@ -1,0 +1,3 @@
+#!/usr/bin/env bash
+
+PYTHON_BUILD_DEFINITIONS=`autovenv builddefspath` autovenv-python-build --definitions

@@ -54,10 +54,18 @@ docs:
 
 testpublish:
 	python setup.py register -r https://testpypi.python.org/pypi
-	python setup.py sdist upload -r https://testpypi.python.org/pypi
-	python setup.py bdist_wheel upload -r https://testpypi.python.org/pypi
+	python setup.py sdist bdist_wheel --universal upload -r https://testpypi.python.org/pypi
 
 publish:
 	python setup.py register
-	python setup.py sdist upload
-	python setup.py bdist_wheel upload
+	python setup.py sdist bdist_wheel --universal upload
+
+updatepythonbuild:
+	rm -fr autovenv/python-build
+	rm -fr pyenv
+	git clone https://github.com/yyuu/pyenv.git
+	mkdir -p autovenv/python-build
+	cp pyenv/plugins/python-build/LICENSE autovenv/python-build/
+	cp -r pyenv/plugins/python-build/share autovenv/python-build/
+	cp pyenv/plugins/python-build/bin/python-build autovenv/python-build/autovenv-python-build
+	rm -fr pyenv
