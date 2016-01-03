@@ -99,6 +99,8 @@ Simply install with `pip <https://pip.pypa.io>`_ globally, ie *not* within a vir
 
 and then add the following line to the end of your .bashrc file:
 
+.. code-block:: shell
+
     source `which autovenv.sh`
 
 That's it!

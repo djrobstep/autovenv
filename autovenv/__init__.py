@@ -130,6 +130,8 @@ class VirtualEnvs(object):
         return os.path.join(self.venv_path(name), 'bin/pip')
 
     def make_virtualenv(self, name):
+        # FIXME: This doesn't work for non-system pythons
+
         new_path = self.venv_path(name)
         if not os.path.isdir(new_path):
             subprocess.call(['virtualenv', new_path])
@@ -210,6 +212,8 @@ class VirtualEnvs(object):
     def recreate(self):
         if self.venv_active:
             self.delete_virtualenv(self.correct_venv_name)
+
+            # FIXME: This doesn't work for non-system pythons
             self.make_virtualenv(self.correct_venv_name)
         else:
             print(RECREATE_ERROR)
@@ -234,18 +238,18 @@ class VirtualEnvs(object):
             help='suggests a bash command that'
             ' (hopefully) will activate the correct venv for this project')
         bash.set_defaults(bash=True)
-        recreate = subparsers.add_parser('recreate',
-                                         help='wipe the current virtualenv'
-                                         ' and reinstall it from scratch')
-        recreate.set_defaults(recreate=True)
+        # recreate = subparsers.add_parser('recreate',
+        #                                 help='wipe the current virtualenv'
+        # #                                 ' and reinstall it from scratch')
+        # recreate.set_defaults(recreate=True)
         info = subparsers.add_parser('info',
                                      help='show the current virtual'
                                      ' environment and python version in use')
         info.set_defaults(info=True)
         builddefspath = subparsers.add_parser(
             'builddefspath',
-            help='show the current virtual'
-            ' environment and python version in use')
+            help='returns the path where'
+            'the python-build definitions are stored')
         builddefspath.set_defaults(builddefspath=True)
 
         choose = subparsers.add_parser(
