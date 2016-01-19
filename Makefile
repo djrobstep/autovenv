@@ -50,7 +50,10 @@ lint:
 checkinstall: freshenv1 pipreqs pipeditable freshenv2 pip
 
 docs:
-	cd docs && make html
+	cd docs && make clean && make html
+
+opendocs:
+	python -c 'import os;import webbrowser;webbrowser.open_new_tab("file://" + os.getcwd() + "/docs/_build/html/index.html")'
 
 testpublish:
 	python setup.py register -r https://testpypi.python.org/pypi

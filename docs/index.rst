@@ -105,7 +105,7 @@ and then add the following line to the end of your .bashrc file:
 
 That's it!
 
-When building python versions, you may need to install some development packages on your system. For Ubuntu, this command may help:
+When building python versions, you may need to install some development packages on your system. If you're using apt-get with the Ubuntu repositories, this command may help:
 
 .. code-block:: shell
 
@@ -124,6 +124,6 @@ Internals
 ---------
 
 .. toctree::
-   :maxdepth: 2
+   :maxdepth: 3
 
    api.rst
