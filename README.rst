@@ -7,12 +7,11 @@ autovenv: virtualenv with less hassle
 
 Virtual environments are great, but they can be a bit annoying to create, manage, and switch between. autovenv takes the annoyance away.
 
-*(Author's note: I created autovenv for my own use and am now chucking the code up on github and pypi very much as alpha software. It would be cool if you'd try it out. Issues/pull requests/etc would be even cooler).*
 
 Documentation
 -------------
 
-Full documentation is at `https://autovenv.readthedocs.org <https://autovenv.readthedocs.org>`_ (currently a work in progress!).
+Full documentation is at `https://autovenv.readthedocs.org <https://autovenv.readthedocs.org>`_.
 
 
 How It Works
