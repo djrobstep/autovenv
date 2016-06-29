@@ -323,42 +323,45 @@ http() {
   local file="$3"
   [ -n "$url" ] || return 1
 
-  if type curl &>/dev/null; then
+  if type aria2c &>/dev/null; then
+    "http_${method}_aria2c" "$url" "$file"
+  elif type curl &>/dev/null; then
     "http_${method}_curl" "$url" "$file"
   elif type wget &>/dev/null; then
     "http_${method}_wget" "$url" "$file"
   else
-    echo "error: please install \`curl\` or \`wget\` and try again" >&2
+    echo "error: please install \`aria2c\`, \`curl\` or \`wget\` and try again" >&2
     exit 1
   fi
 }
 
+http_head_aria2c() {
+  aria2c --dry-run --no-conf=true ${ARIA2_OPTS} "$1" >&4 2>&1
+}
+
+http_get_aria2c() {
+  local out="${2:-$(mktemp "out.XXXXXX")}"
+  if aria2c --allow-overwrite=true --no-conf=true -o "${out}" ${ARIA2_OPTS} "$1" >&4; then
+    [ -n "$2" ] || cat "${out}"
+  else
+    false
+  fi
+}
+
 http_head_curl() {
-  options=""
-  [ -n "${IPV4}" ] && options="--ipv4"
-  [ -n "${IPV6}" ] && options="--ipv6"
-  curl -qsILf ${options} "$1" >&4 2>&1
+  curl -qsILf ${CURL_OPTS} "$1" >&4 2>&1
 }
 
 http_get_curl() {
-  options=""
-  [ -n "${IPV4}" ] && options="--ipv4"
-  [ -n "${IPV6}" ] && options="--ipv6"
-  curl -q -o "${2:--}" -sSLf ${options} "$1"
+  curl -q -o "${2:--}" -sSLf ${CURL_OPTS} "$1"
 }
 
 http_head_wget() {
-  options=""
-  [ -n "${IPV4}" ] && options="--inet4-only"
-  [ -n "${IPV6}" ] && options="--inet6-only"
-  wget -q --spider ${options} "$1" >&4 2>&1
+  wget -q --spider ${WGET_OPTS} "$1" >&4 2>&1
 }
 
 http_get_wget() {
-  options=""
-  [ -n "${IPV4}" ] && options="--inet4-only"
-  [ -n "${IPV6}" ] && options="--inet6-only"
-  wget -nv ${options} -O "${2:--}" "$1"
+  wget -nv ${WGET_OPTS} -O "${2:--}" "$1"
 }
 
 fetch_tarball() {
@@ -680,6 +683,26 @@ package_option() {
   shift 2
   local value=( "${!array}" "$@" )
   eval "$variable=( \"\${value[@]}\" )"
+}
+
+build_package_warn_eol() {
+  local package_name="$1"
+
+  { echo
+    echo "WARNING: $package_name is past its end of life and is now unsupported."
+    echo "It no longer receives bug fixes or critical security updates."
+    echo
+  } >&3
+}
+
+build_package_warn_unsupported() {
+  local package_name="$1"
+
+  { echo
+    echo "WARNING: $package_name is nearing its end of life."
+    echo "It only receives critical security updates, no bug fixes."
+    echo
+  } >&3
 }
 
 build_package_standard() {
@@ -1439,38 +1462,44 @@ apply_python_patch() {
   esac
 }
 
-verify_python() {
-  if [[ "$PYTHON_CONFIGURE_OPTS" == *"--enable-framework"* ]]; then
+build_package_symlink_version_suffix() {
+  if [[ "$PYTHON_CONFIGURE_OPTS" == *"--enable-framework"* ]] && [ ! -e "${PREFIX_PATH}/bin" ]; then
     # Only symlinks are installed in ${PREFIX_PATH}/bin
-    rm -fr "${PREFIX_PATH}/bin"
     ln -fs "${PREFIX_PATH}/Python.framework/Versions/Current/bin" "${PREFIX_PATH}/bin"
   fi
 
   # Not create symlinks on `altinstall` (#255)
   if [[ "$PYTHON_MAKE_INSTALL_TARGET" != *"altinstall"* ]]; then
-    local suffix="${1#python}"
-    local file link
     shopt -s nullglob
-    for file in "${PREFIX_PATH}/bin"/*; do
-      unset link
-      case "${file}" in
-      */"python${suffix}-config" )
-        # Symlink `pythonX.Y-config` to `python-config` if `python-config` is missing (#296)
-        link="${file%/*}/python-config"
-      ;;
-      */*"-${suffix}" )
-        link="${file%%-${suffix}}"
-      ;;
-      */*"${suffix}" )
-        link="${file%%${suffix}}"
-      ;;
-      esac
-      if [ -n "$link" ] && [ ! -e "$link" ]; then
-        ( cd "${file%/*}" && ln -fs "${file##*/}" "${link##*/}" )
-      fi
-    done
+    local version_bin="$(ls -1 "${PREFIX_PATH}/bin/python"* | grep '[0-9]$' | sort | tail -1)"
+    suffix="$(basename "${version_bin}" | sed -e 's/^python//')"
+    if [ -n "${suffix}" ]; then
+      local file link
+      for file in "${PREFIX_PATH}/bin"/*; do
+        unset link
+        case "${file}" in
+        */"python${suffix}-config" )
+          # Symlink `pythonX.Y-config` to `python-config` if `python-config` is missing (#296)
+          link="${file%/*}/python-config"
+        ;;
+        */*"-${suffix}" )
+          link="${file%%-${suffix}}"
+        ;;
+        */*"${suffix}" )
+          link="${file%%${suffix}}"
+        ;;
+        esac
+        if [ -n "$link" ] && [ ! -e "$link" ]; then
+          ( cd "${file%/*}" && ln -fs "${file##*/}" "${link##*/}" )
+        fi
+      done
+    fi
     shopt -u nullglob
   fi
+}
+
+verify_python() {
+  build_package_symlink_version_suffix
 
   if [ ! -x "${PYTHON_BIN}" ]; then
     { colorize 1 "ERROR"
@@ -1605,7 +1634,7 @@ build_package_verify_py36() {
 }
 
 build_package_ez_setup() {
-  local ez_setup="${BUILD_PATH}/ez_setup.py"
+  local ez_setup="ez_setup.py"
   rm -f "${ez_setup}"
   { if [ "${EZ_SETUP+defined}" ] && [ -f "${EZ_SETUP}" ]; then
       echo "Installing setuptools from ${EZ_SETUP}..." 1>&2
@@ -1620,10 +1649,11 @@ build_package_ez_setup() {
     echo "error: failed to install setuptools via ez_setup.py" >&2
     return 1
   }
+  build_package_symlink_version_suffix
 }
 
 build_package_get_pip() {
-  local get_pip="${BUILD_PATH}/get-pip.py"
+  local get_pip="get-pip.py"
   rm -f "${get_pip}"
   { if [ "${GET_PIP+defined}" ] && [ -f "${GET_PIP}" ]; then
       echo "Installing pip from ${GET_PIP}..." 1>&2
@@ -1638,6 +1668,7 @@ build_package_get_pip() {
     echo "error: failed to install pip via get-pip.py" >&2
     return 1
   }
+  build_package_symlink_version_suffix
 }
 
 build_package_ensurepip() {
@@ -1648,6 +1679,7 @@ build_package_ensurepip() {
   fi
   # FIXME: `--altinstall` with `get-pip.py`
   "$PYTHON_BIN" -s -m ensurepip ${ensurepip_opts} 1>/dev/null 2>&1 || build_package_get_pip "$@" || return 1
+  build_package_symlink_version_suffix
 }
 
 version() {
@@ -1815,6 +1847,10 @@ fi
 if [ -n "$PYTHON_BUILD_SKIP_MIRROR" ] || ! has_checksum_support compute_sha2; then
   unset PYTHON_BUILD_MIRROR_URL
 fi
+
+ARIA2_OPTS="${PYTHON_BUILD_ARIA2_OPTS} ${IPV4+--disable-ipv6=true} ${IPV6+--disable-ipv6=false}"
+CURL_OPTS="${PYTHON_BUILD_CURL_OPTS} ${IPV4+--ipv4} ${IPV6+--ipv6}"
+WGET_OPTS="${PYTHON_BUILD_WGET_OPTS} ${IPV4+--inet4-only} ${IPV6+--inet6-only}"
 
 # Add an option to build a debug version of Python (#11)
 if [ -n "$DEBUG" ]; then
