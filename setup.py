@@ -2,19 +2,12 @@
 
 from __future__ import (absolute_import, division, print_function,
                         unicode_literals)
-import os
 
 from setuptools import setup, find_packages
 
-
-FOLDER_PATH = os.path.dirname(os.path.realpath(__file__))
-_, FOLDER_NAME = os.path.split(FOLDER_PATH)
-NAME = FOLDER_NAME
-
-
 setup(
-    name=NAME,
-    version='0.2.1467161886',
+    name='autovenv',
+    version='0.2.1490427622',
     description='virtualenv with less hassle',
     url='http://autovenv.readthedocs.org',
     long_description='Virtual environments are great, but they can be a bit annoying to create, manage, and switch between. It gets even worse when multiple different python versions come into play. autovenv takes the annoyance away.\n\nFull documentation is at https://autovenv.readthedocs.org',
@@ -22,6 +15,10 @@ setup(
     author_email='robertlechte@gmail.com',
     install_requires=[
         'virtualenv',
+        'appdirs',
+        'pathlib2',
+	'pyyaml',
+	'six'
     ],
     packages=find_packages(),
     classifiers=[

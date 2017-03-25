@@ -28,7 +28,7 @@ Just cd to anywhere within a python project, and autovenv will create a virtual 
 
     alex@xyz:~$ cd pyprojects/skynet
     AUTOVENV: creating virtual environment: skynet
-    New python executable in /home/alex/.virtualenvs/skynet/bin/python
+    New python executable in /home/alex/.local/share/autovenv/venvs/skynet/bin/python
     Installing setuptools, pip, wheel...done.
     Requirement already up-to-date: pip in ...
     (skynet)alex@xyz:~/pyprojects/skynet$
@@ -49,5 +49,9 @@ Simply install with `pip <https://pip.pypa.io>`_ globally, ie *not* within a vir
 and then add the following line to the end of your .bashrc file::
 
     source `which autovenv.sh`
+
+or if you're using fish:
+
+    source `which autovenv.fish`
 
 That's it.

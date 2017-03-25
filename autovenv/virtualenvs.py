@@ -3,6 +3,8 @@ from __future__ import (absolute_import, division, print_function,
 
 import argparse
 
+from pathlib2 import Path
+
 import os
 import sys
 import io
@@ -14,48 +16,51 @@ import shlex
 
 from pkg_resources import resource_filename
 
+import appdirs
+
+import six
+import yaml
+
+from .util import mkdir_p, create_symlink, resolve_path, file_exists, jsondump, to_string, unresolve
+
+
+
+
 HOME = os.path.expanduser('~')
 CWD = os.getcwd()
-PYTHONBUILDS = os.path.expanduser('~/.python-versions')
+
+dirs = appdirs.AppDirs('autovenv', 'djrobstep')
+
+DATA_DIR = dirs.user_data_dir
 
 RECREATE_ERROR = "AUTOVENV: ERROR (not within a python project)"
 
-
-def symlink_force(target, link_name):
-    """
-    Creates a symlink. If a symlink of this link name
-    already exists, replace it.
-    """
-
-    try:
-        os.symlink(target, link_name)
-    except OSError as e:
-        if e.errno == errno.EEXIST:
-            os.remove(link_name)
-            os.symlink(target, link_name)
-        else:
-            raise e
+import json
 
 
-def mkdir_p(path):  # pragma: no cover
-    try:
-        os.makedirs(path)
-    except OSError as exc:
-        if exc.errno == errno.EEXIST and os.path.isdir(path):
-            pass
-        else:
-            raise
-
-
-def is_project_root(path):
+def is_project_root(path, file_names=None):
     """Tests if a given folder path is likely to be the
-    root of a python project. At the moment, this simply tests
-    for the presence of a requirements.txt file.
+    root of a python project.
     """
-    return os.path.isfile(os.path.join(path, 'requirements.txt'))
+
+    def file_is_present(filename):
+        return os.path.isfile(os.path.join(path, filename))
+
+    file_names = file_names or []
+    return any(file_is_present(each) for each in file_names)
 
 
-def get_likely_projfolder(fpath, home):
+def get_likely_projfolder(fpath, home, config=None):
+    config = config or {}
+
+    if config:
+        overrides = config.get('overrides', {})
+        for k, v in overrides:
+            if not v['venvname']:
+                continue
+            if fpath.startswith(k):
+                return k
+
     f = fpath
     likely_projfolder = None
 
@@ -63,7 +68,7 @@ def get_likely_projfolder(fpath, home):
         if not f.startswith(home):
             break
 
-        if is_project_root(f):
+        if is_project_root(f, config.get('file_names')):
             likely_projfolder = f
 
         parent = os.path.dirname(f)
@@ -71,7 +76,36 @@ def get_likely_projfolder(fpath, home):
             break
 
         f = parent
-    return likely_projfolder
+
+    if likely_projfolder:
+        return likely_projfolder
+
+
+DEFAULT_CONFIG = {'file_names': ['requirements.txt'] }
+
+
+def parse_override(v):
+    if not v:
+        pyversion = None
+        venvname = None
+    else:
+        try:
+            pyversion, venvname = v.split('/', 1)
+            pyversion = pyversion or None
+            venvname = venvname or None
+        except ValueError:
+            pyversion = v
+            venvname = None
+    return dict(pyversion=pyversion, venvname=venvname)
+
+
+def unparse_override(v):
+    pyversion = v['pyversion']
+    venvname = v['venvname']
+    s = pyversion or ''
+    if venvname:
+        s += '/{}'.format(venvname)
+    return s or None
 
 
 class VirtualEnvs(object):
@@ -79,20 +113,55 @@ class VirtualEnvs(object):
     This is where the action happens.
     """
 
-    def __init__(self, venv_home=None, home=None, cwd=None, pythonbuilds=None):
-        self.home = os.path.abspath(home or HOME)
-        self.cwd = os.path.abspath(cwd or CWD)
-        self.pythonbuilds = os.path.abspath(pythonbuilds or PYTHONBUILDS)
+    def __init__(self, data_dir=None, home=None, cwd=None):
+        self.data_dir = resolve_path(data_dir or DATA_DIR)
+        self.home = resolve_path(home or HOME)
+        self.cwd = resolve_path(cwd or CWD)
 
-        if venv_home:
-            self.venv_home = os.path.abspath(os.path.expanduser(venv_home))
-        else:
-            self.venv_home = os.path.expanduser('~/.virtualenvs')
+        self.configpath = os.path.join(self.data_dir, 'config')
+        self.pyversionspath = os.path.join(self.data_dir, 'pyversions')
+        self.venvspath = os.path.join(self.data_dir, 'venvs')
+        mkdir_p(self.venvspath)
 
-        mkdir_p(self.venv_home)
+        self.config = self.get_config()
+        self.save_config(self.config)
+
+    def load_config(self):
+        try:
+            text = Path(self.configpath).read_text()
+            return yaml.load(text)
+        except IOError as exc:
+            if exc.errno == errno.ENOENT:
+                return None
+            else:
+                raise
+
+    def get_config(self):
+        config_yaml = self.load_config()
+        if config_yaml is None:
+            return DEFAULT_CONFIG
+
+        overrides = config_yaml.get('override', {})
+        config_yaml['override'] = { resolve_path(k):
+            parse_override(v) for k, v in overrides.items() }
+
+        return config_yaml
+
+    def save_config(self, config):
+        yaml.SafeDumper.add_representer(
+    type(None),
+    lambda dumper, value: dumper.represent_scalar(u'tag:yaml.org,2002:null', '')
+  )
+        config['override'] = {unresolve(k, self.home): unparse_override(v) for k, v in config.get('override', {}).items() }
+
+        text = jsondump(config)
+        text = yaml.safe_dump(config,default_flow_style=False)
+
+        Path(self.configpath).write_text(to_string(text))
+        self.config = self.get_config()
 
     def venv_path(self, name):
-        return os.path.join(self.venv_home, self.current_pythonbuild_name or
+        return os.path.join(self.venvspath, self.current_pythonbuild_name or
                             '', name)
 
     @property
@@ -100,7 +169,6 @@ class VirtualEnvs(object):
         """Returns the path of the currently active
         virtual environment.
         """
-
         return os.environ.get('VIRTUAL_ENV') or ''
 
     @property
@@ -125,7 +193,9 @@ class VirtualEnvs(object):
         """If we're within a python project, return the
         path to the root of that project. Otherwise, return None.
         """
-        return get_likely_projfolder(self.cwd, self.home)
+
+        config = self.get_config()
+        return get_likely_projfolder(self.cwd, self.home, config=config)
 
     @property
     def correct_venv_name(self):
@@ -133,6 +203,12 @@ class VirtualEnvs(object):
         should be active for this project. If we're not within
         a project, return an empty string.
         """
+
+        for k, v in self.config['override'].items():
+            if self.cwd.startswith(k):
+                venvname = v['venvname']
+                if venvname:
+                    return venvname
 
         likely = self.likely_projfolder
         return os.path.split(likely or '')[1]
@@ -179,12 +255,12 @@ class VirtualEnvs(object):
 
     @property
     def pythonbuilds_current(self):
-        return os.path.join(self.pythonbuilds, 'current')
+        return os.path.join(self.pyversionspath, 'current')
 
     @property
     def pythonversion_path(self):
         if self.current_pythonbuild_name:
-            return os.path.join(self.pythonbuilds,
+            return os.path.join(self.pyversionspath,
                                 self.current_pythonbuild_name)
 
     @property
@@ -205,13 +281,18 @@ class VirtualEnvs(object):
 
     @property
     def virtualenv_creation_prefix(self):
-        p_pyvenv = self.pyvenv_path
         p_python = self.python_path
 
-        if os.path.exists(p_pyvenv):
-            return p_pyvenv
-        elif os.path.exists(p_python):
+        # try using in-built if proper virtualenv isn't installed for some reason
+        p_pyvenv = self.pyvenv_path
+
+
+
+
+        if os.path.exists(p_python):
             return 'virtualenv -p {}'.format(p_python)
+        elif os.path.exists(p_pyvenv):
+            return p_pyvenv
 
         raise ValueError('something went wrong finding a python')
 
@@ -240,12 +321,26 @@ class VirtualEnvs(object):
                 if version_string:
                     return version_string
 
+        for k, v in self.config['override'].items():
+            if self.cwd.startswith(k):
+                pyversion = v['pyversion']
+                if pyversion:
+                    return pyversion
+
         if os.path.exists(self.pythonbuilds_current):
             realpath = os.path.realpath(self.pythonbuilds_current)
             return os.path.split(realpath)[1]
 
     @property
     def suggested_bash_command(self):
+        return self.suggested_command(shell='bash')
+
+    @property
+    def suggested_fish_command(self):
+        return self.suggested_command(shell='fish')
+
+
+    def suggested_command(self, shell='bash'):
         """Generates the correct bash command to make sure that the
         appropriate virtualenv is activated for the project folder
         you're in (or to deactivate if you're not in a project folder).
@@ -272,15 +367,27 @@ class VirtualEnvs(object):
                                     self.correct_venv_path)
 
             if not self.correct_venv_active:
-                command += '. {0}; '.format(self.activate_path(
-                    self.correct_venv_name))
+                if shell == 'fish':
+                    extension = '.fish'
+                else:
+                    extension = ''
+
+                command += 'source {0}{1}'.format(self.activate_path(
+                    self.correct_venv_name), extension)
+
 
             if command:
-                return 'eval {}'.format(command)
+                # if shell == 'bash':
+                command = 'eval ' + command
+
+            return command
 
         elif self.current_venv_name:
-            return "eval echo 'AUTOVENV: deactivating...' ; deactivate"
+            command = "echo 'AUTOVENV: deactivating...' ; deactivate"
 
+            #if shell == 'bash':
+            command = 'eval ' + command
+            return command
         return ''
 
     def recreate(self):
@@ -294,52 +401,11 @@ class VirtualEnvs(object):
     def build_defs_path(self):
         return resource_filename(__name__, 'python-build/share/python-build')
 
-    def do_command(self):
-
-        parser = argparse.ArgumentParser(
-            description='Work with venvs and python versions.')
-        parser.set_defaults(info=False,
-                            bash=False,
-                            python_version=False,
-                            recreate=False,
-                            builddefspath=False)
-        subparsers = parser.add_subparsers()
-
-        bash = subparsers.add_parser(
-            'bash',
-            help='suggests a bash command that'
-            ' (hopefully) will activate the correct venv for this project')
-        bash.set_defaults(bash=True)
-        recreate = subparsers.add_parser('recreate',
-                                         help='wipe the current virtualenv'
-                                         ' and reinstall it from scratch')
-        recreate.set_defaults(recreate=True)
-        info = subparsers.add_parser('info',
-                                     help='show the current virtual'
-                                     ' environment and python version in use')
-        info.set_defaults(info=True)
-        builddefspath = subparsers.add_parser(
-            'builddefspath',
-            help='returns the path where'
-            'the python-build definitions are stored')
-        builddefspath.set_defaults(builddefspath=True)
-
-        choose = subparsers.add_parser(
-            'choose',
-            help='set your preferred python version')
-        choose.add_argument(
-            'python_version',
-            help='your preferred python version '
-            '(see possible versions with "autovenv-pythons-available")')
-
-        if not sys.argv[1:]:
-            parser.print_help()
-            return
-        else:
-            args = parser.parse_args()
-
+    def do_command(self, args):
         if args.bash:
             print(self.suggested_bash_command)
+        elif args.fish:
+            print(self.suggested_fish_command)
         elif args.recreate:
             self.recreate()
         elif args.info:
@@ -354,11 +420,18 @@ class VirtualEnvs(object):
                 print('...which is really at: {}'.format(os.path.realpath(p)))
             else:
                 print('Using system python')
+            # print(self.config['overrides'])
+            print('Config and data stored in: '.format(self.data_dir))
+            print('Current config:')
+            print(self.config)
+
         elif args.builddefspath:
             print(self.build_defs_path)
+        elif args.pyversionspath:
+            print(self.pyversionspath)
         elif args.python_version:
-            target = os.path.join(self.pythonbuilds, args.python_version)
-            rel_target = os.path.relpath(target, self.pythonbuilds)
+            target = os.path.join(self.pyversionspath, args.python_version)
+            rel_target = os.path.relpath(target, self.pyversionspath)
             link_name = self.pythonbuilds_current
-            symlink_force(rel_target, link_name)
+            create_symlink(rel_target, link_name)
             print('Now using the python at: {}'.format(target))

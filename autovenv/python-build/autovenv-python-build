@@ -14,7 +14,7 @@
 #   -g/--debug       Build a debug version
 #
 
-PYTHON_BUILD_VERSION="20160130"
+PYTHON_BUILD_VERSION="20160602"
 
 OLDIFS="$IFS"
 
@@ -247,7 +247,7 @@ compute_sha2() {
     output="$("$openssl" dgst -sha256 2>/dev/null)" || return 1
     echo "${output##* }"
   elif type sha256sum &>/dev/null; then
-    output="$(sha256sum --quiet)" || return 1
+    output="$(sha256sum -b)" || return 1
     echo "${output% *}"
   else
     return 1
@@ -473,6 +473,10 @@ download_tarball() {
   fi
 }
 
+has_tar_xz_support() {
+  tar Jc /dev/null 1>/dev/null 2>&1
+}
+
 fetch_git() {
   local package_name="$1"
   local git_url="$2"
@@ -584,7 +588,7 @@ fetch_jar() {
 
   # Must use full path to jar and destination directory:
   #   http://bugs.jython.org/issue2350
-  { if $JAVA -jar $PWD/${package_name}.jar -s -d $PWD/${package_name}; then
+  { if $JAVA -jar "$PWD/${package_name}.jar" -s -d "$PWD/${package_name}"; then
       if [ -z "$KEEP_BUILD_PATH" ]; then
         rm -f "$package_filename"
       else
@@ -898,11 +902,10 @@ fix_jython_shebangs() {
   for file in "${PREFIX_PATH}/bin"/*; do
     case "$(head -1 "${file}")" in
     "#!"*"/bin/jython" )
-      sed -i.bak "1 s:.*:#\!\/usr\/bin\/env ${PREFIX_PATH}\/bin\/jython:" "${file}"
+      sed -i.bak "1 s:.*:#\!${PREFIX_PATH}\/bin\/jython:" "${file}"
       ;;
     "#!"*"/bin/python2.7"* )
-      # Jython 2.7+ requires CPython 2.7 to run
-      sed -i.bak "1 s:.*:#\!\/usr\/bin\/env python2.7:" "${file}"
+      sed -i.bak "1 s:.*:#\!\/usr\/bin\/env python:" "${file}"
       ;;
     esac
     rm -f "${file}.bak"
@@ -912,6 +915,15 @@ fix_jython_shebangs() {
 build_package_jython_builder() {
   ant >&4 2>&1
   ( cd "dist" && build_package_jython )
+}
+
+build_package_pyston() {
+  mkdir -p "${PREFIX_PATH}/"
+  cp -fR . "${PREFIX_PATH}/"
+  chmod +x "${PREFIX_PATH}/"pyston
+  # FIXME ugly hack below adapted from
+  # https://github.com/dropbox/pyston/blob/master/docker/pyston/Dockerfile
+  ( cd "${PREFIX_PATH}/" && ./pyston virtualenv/virtualenv.py . )
 }
 
 build_package_ironpython() {
@@ -949,6 +961,10 @@ pypy_architecture() {
     ;;
   * ) return 1 ;;
   esac
+}
+
+pyston_architecture() {
+  pypy_architecture
 }
 
 build_package_pypy() {
@@ -1259,6 +1275,17 @@ require_java() {
   export JAVA="$java"
 }
 
+# Let Jython installer to generate shell script instead of python script even if there's `python2.7` available in `$PATH` (#800)
+# FIXME: better function naming
+unrequire_python27() {
+  export PATH="${BUILD_PATH}/bin:${PATH}"
+  mkdir -p "${BUILD_PATH}/bin"
+  if command -v python2.7 1>/dev/null 2>&1; then
+    echo false > "${BUILD_PATH}/bin/python2.7"
+    chmod +x "${BUILD_PATH}/bin/python2.7"
+  fi
+}
+
 require_distro() {
   for arg; do
     if [[ "$(cat /etc/issue 2>/dev/null || true)" == "$arg"* ]]; then
@@ -1314,7 +1341,7 @@ use_homebrew_yaml() {
 
 has_broken_mac_readline() {
   # Mac OS X 10.4 has broken readline.
-  # https://github.com/yyuu/pyenv/issues/23
+  # https://github.com/pyenv/pyenv/issues/23
   is_mac &&
   ! configured_with_package_dir "python" "readline/rlconf.h" &&
   ! use_homebrew_readline
@@ -1463,7 +1490,12 @@ apply_python_patch() {
 }
 
 build_package_symlink_version_suffix() {
-  if [[ "$PYTHON_CONFIGURE_OPTS" == *"--enable-framework"* ]] && [ ! -e "${PREFIX_PATH}/bin" ]; then
+  if [[ "$PYTHON_CONFIGURE_OPTS" == *"--enable-framework"* ]]; then
+    if [ -e "${PREFIX_PATH}/bin" ]; then
+      # Always create `bin` as symlink to framework path if the version was built with `--enable-frameowrk` (#590)
+      rm -rf "${PREFIX_PATH}/bin.orig"
+      mv -f "${PREFIX_PATH}/bin" "${PREFIX_PATH}/bin.orig"
+    fi
     # Only symlinks are installed in ${PREFIX_PATH}/bin
     ln -fs "${PREFIX_PATH}/Python.framework/Versions/Current/bin" "${PREFIX_PATH}/bin"
   fi
@@ -1507,7 +1539,7 @@ verify_python() {
       echo
       echo "The python-build could not find proper executable of Python after successful build."
       echo "Please open an issue for future improvements."
-      echo "https://github.com/yyuu/pyenv/issues"
+      echo "https://github.com/pyenv/pyenv/issues"
       return 1
     } >&3
   fi
@@ -1528,7 +1560,7 @@ verify_python_module() {
       echo ": The Python $1 extension was not compiled. Missing the ${2:-$1}?"
       echo
       echo "Please consult to the Wiki page to fix the problem."
-      echo "https://github.com/yyuu/pyenv/wiki/Common-build-problems"
+      echo "https://github.com/pyenv/pyenv/wiki/Common-build-problems"
       echo
       return 1
     } >&3
@@ -1631,6 +1663,11 @@ build_package_verify_py35() {
 # Post-install check for Python 3.6.x
 build_package_verify_py36() {
   build_package_verify_py35 "$1" "${2:-3.6}"
+}
+
+# Post-install check for Python 3.7.x
+build_package_verify_py37() {
+  build_package_verify_py36 "$1" "${2:-3.7}"
 }
 
 build_package_ez_setup() {
@@ -1746,6 +1783,8 @@ for option in "${OPTIONS[@]}"; do
     ;;
   "g" | "debug" )
     DEBUG=true
+    # Disable optimization (#808)
+    PYTHON_CFLAGS="-O0 ${PYTHON_CFLAGS}"
     ;;
   "4" | "ipv4")
     IPV4=true
@@ -1823,8 +1862,16 @@ fi
 #fi
 
 if [ -z "$MAKE" ]; then
-  if [ "FreeBSD" = "$(uname -s)" ] && [ "$(uname -r | sed 's/[^[:digit:]].*//')" -lt 10 ]; then
-    export MAKE="gmake"
+  if [ "FreeBSD" = "$(uname -s)" ]; then
+#   if [ $(echo $1 | sed 's/-.*$//') = "jruby" ]; then
+#     export MAKE="gmake"
+#   else
+      if [ "$(uname -r | sed 's/[^[:digit:]].*//')" -lt 10 ]; then
+        export MAKE="gmake"
+      else
+        export MAKE="make"
+      fi
+#   fi
   else
     export MAKE="make"
   fi
@@ -1837,7 +1884,7 @@ else
 fi
 
 if [ -z "$PYTHON_BUILD_MIRROR_URL" ]; then
-  PYTHON_BUILD_MIRROR_URL="https://yyuu.github.io/pythons"
+  PYTHON_BUILD_MIRROR_URL="https://pyenv.github.io/pythons"
   PYTHON_BUILD_DEFAULT_MIRROR=1
 else
   PYTHON_BUILD_MIRROR_URL="${PYTHON_BUILD_MIRROR_URL%/}"
@@ -1904,7 +1951,9 @@ fi
 
 # Compile with `--enable-unicode=ucs4` by default (#257)
 if [[ "$PYTHON_CONFIGURE_OPTS" != *"--enable-unicode="* ]]; then
-  package_option python configure --enable-unicode=ucs4
+  if ! is_mac; then
+    package_option python configure --enable-unicode=ucs4
+  fi
 fi
 
 # SSL Certificate error with older wget that does not support Server Name Indication (#60)

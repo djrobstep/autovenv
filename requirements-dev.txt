@@ -2,9 +2,8 @@
 
 pytest
 pytest-cov
+pytest-sugar
 
-autopep8
-yapf
 flake8
 tox
 

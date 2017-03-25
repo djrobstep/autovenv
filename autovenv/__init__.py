@@ -9,18 +9,15 @@ Autovenv helps you manage your virtual environments.
 from __future__ import (absolute_import, division, print_function,
                         unicode_literals)
 
-from .virtualenvs import VirtualEnvs, get_likely_projfolder
+from .virtualenvs import VirtualEnvs, get_likely_projfolder, DEFAULT_CONFIG
+from .util import create_symlink, mkdir_p, file_exists, resolve_path
 
+from .command import do_command
 
-def do_command():
-    """Entry point for the 'autovenv' command.
-
-    Simply creates a VirtualEnvs object with default parameters,
-    and runs the command via that.
-    """
-
-    v = VirtualEnvs()
-    v.do_command()
-
-
-__all__ = ['VirtualEnvs', 'do_command', 'get_likely_projfolder']
+__all__ = [
+    'VirtualEnvs',
+    'DEFAULT_CONFIG',
+    'do_command',
+    'get_likely_projfolder',
+    'create_symlink',
+    'mkdir_p']
