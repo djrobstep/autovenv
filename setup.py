@@ -7,7 +7,7 @@ from setuptools import setup, find_packages
 
 setup(
     name='autovenv',
-    version='0.2.1490427622',
+    version='0.2.1490825106',
     description='virtualenv with less hassle',
     url='http://autovenv.readthedocs.org',
     long_description='Virtual environments are great, but they can be a bit annoying to create, manage, and switch between. It gets even worse when multiple different python versions come into play. autovenv takes the annoyance away.\n\nFull documentation is at https://autovenv.readthedocs.org',
