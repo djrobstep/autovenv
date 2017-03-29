@@ -377,8 +377,8 @@ class VirtualEnvs(object):
 
 
             if command:
-                # if shell == 'bash':
-                command = 'eval ' + command
+                if shell == 'bash':
+                    command = 'eval ' + command
 
             return command
 
