@@ -37,7 +37,16 @@ Just cd to anywhere within a python project, and autovenv will create a virtual 
 
 cd to a different project, it'll switch virtual environments automatically. cd out of a project and it'll deactivate the virtual environment.
 
-autovenv tries to keep things tidy by storing the virtualenvs it creates under ~/.virtualenvs
+autovenv tries to keep things tidy by storing config file, built python versions, and virtual environments in one app directory.
+
+The location of this directory is platform-dependent (only linux it's at ~/.local/share/autovenv).
+
+Locations:
+
+  - <appdir>/config - the config file
+  - <appdir>/pyversions - built python versions
+  - <appdir>/venvs - virtual environments
+
 
 Installation
 ------------
