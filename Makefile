@@ -9,10 +9,7 @@ all: clean fmt lint tox docs
 
 pip:
 	pip install --upgrade pip
-	pip install --upgrade -r requirements-dev.txt
-
-pipreqs:
-	pip install -r requirements.txt
+	pip install --upgrade -r requirements.txt
 
 pipeditable:
 	pip install -e .
@@ -45,8 +42,8 @@ testpublish:
 	python setup.py sdist bdist_wheel --universal upload -r https://testpypi.python.org/pypi
 
 publish:
-	python setup.py register
-	python setup.py sdist bdist_wheel --universal upload
+	python setup.py sdist bdist_wheel --universal
+	twine upload dist/*
 
 updatepythonbuild:
 	rm -fr autovenv/python-build

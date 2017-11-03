@@ -286,9 +286,6 @@ class VirtualEnvs(object):
         # try using in-built if proper virtualenv isn't installed for some reason
         p_pyvenv = self.pyvenv_path
 
-
-
-
         if os.path.exists(p_python):
             return 'virtualenv -p {}'.format(p_python)
         elif os.path.exists(p_pyvenv):
