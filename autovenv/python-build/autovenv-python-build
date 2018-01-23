@@ -60,9 +60,10 @@ resolve_link() {
 }
 
 abs_dirname() {
-  local cwd="$(pwd)"
   local path="$1"
 
+  # Use a subshell to avoid modifying the current path
+  (
   while [ -n "$path" ]; do
     cd "${path%/*}"
     local name="${path##*/}"
@@ -70,7 +71,7 @@ abs_dirname() {
   done
 
   pwd
-  cd "$cwd"
+  )
 }
 
 capitalize() {
@@ -154,8 +155,12 @@ num_cpu_cores() {
   Darwin | *BSD )
     num="$(sysctl -n hw.ncpu 2>/dev/null || true)"
     ;;
+  SunOS )
+    num="$(getconf NPROCESSORS_ONLN 2>/dev/null || true)"
+    ;;
   * )
-    num="$(grep ^processor /proc/cpuinfo 2>/dev/null | wc -l | xargs)"
+    num="$({ getconf _NPROCESSORS_ONLN ||
+             grep -c ^processor /proc/cpuinfo; } 2>/dev/null)"
     num="${num#0}"
     ;;
   esac
@@ -328,6 +333,11 @@ http() {
   elif type curl &>/dev/null; then
     "http_${method}_curl" "$url" "$file"
   elif type wget &>/dev/null; then
+    # SSL Certificate error with older wget that does not support Server Name Indication (#60)
+    if [[ "$(wget --version 2>/dev/null || true)" = "GNU Wget 1.1"[0-3]* ]]; then
+      echo "python-build: wget (< 1.14) doesn't support Server Name Indication. Please install curl (>= 7.18.1) and try again" >&2
+      return 1
+    fi
     "http_${method}_wget" "$url" "$file"
   else
     echo "error: please install \`aria2c\`, \`curl\` or \`wget\` and try again" >&2
@@ -1351,6 +1361,17 @@ require_distro() {
   return 1
 }
 
+require_osx_version() {
+  function version { echo "$@" | awk -F. '{ printf("%d%03d%03d%03d\n", $1,$2,$3,$4); }'; }
+
+  local required_version="$@"
+  local osx_version="$(sw_vers -productVersion)"
+  if [[ $(version $osx_version) -ge $(version $required_version) ]]; then
+    return 0
+  fi
+  return 1
+}
+
 configured_with_package_dir() {
   local package_var_name="$(capitalize "$1")"
   shift 1
@@ -2047,12 +2068,6 @@ if [[ "$PYTHON_CONFIGURE_OPTS" != *"--enable-unicode="* ]]; then
       ;;
     esac
   fi
-fi
-
-# SSL Certificate error with older wget that does not support Server Name Indication (#60)
-if ! command -v curl 1>/dev/null 2>&1 && [[ "$(wget --version 2>/dev/null || true)" = "GNU Wget 1.1"[0-3]* ]]; then
-  echo "python-build: wget (< 1.14) doesn't support Server Name Indication. Please install curl (>= 7.18.1) and try again" >&2
-  exit 1
 fi
 
 # Unset `PIP_REQUIRE_VENV` during build (#216)
