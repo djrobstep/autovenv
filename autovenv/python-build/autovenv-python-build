@@ -1068,6 +1068,26 @@ build_package_pypy_builder() {
   build_package_pypy
 }
 
+activepython_architecture() {
+  case "$(uname -s)" in
+  "Darwin" ) echo "macosx10.9-i386-x86_64" ;;
+  "Linux" )
+    case "$(uname -m)" in
+    "i368" | "i486" | "i586" | "i686" | "i786" ) echo "linux-x86" ;;
+    "x86_64" ) echo "linux-x86_64" ;;
+    * ) return 1 ;;
+    esac
+    ;;
+  * ) return 1 ;;
+  esac
+}
+
+build_package_activepython() {
+  local package_name="$1"
+  { bash "install.sh" --install-dir "${PREFIX_PATH}"
+  } >&4 2>&1
+}
+
 anaconda_architecture() {
   case "$(uname -s)" in
   "Darwin" ) echo "MacOSX-x86_64" ;;
@@ -1467,6 +1487,7 @@ use_homebrew_openssl() {
   local ssldir="$(brew --prefix openssl 2>/dev/null || true)"
   if [ -d "$ssldir" ]; then
     echo "python-build: use openssl from homebrew"
+    export PKG_CONFIG_PATH="$ssldir/lib/pkgconfig/:${PKG_CONFIG_PATH}"
     export CPPFLAGS="-I$ssldir/include ${CPPFLAGS}"
     export LDFLAGS="-L$ssldir/lib ${LDFLAGS}"
   else
@@ -1773,6 +1794,11 @@ build_package_verify_py37() {
   build_package_verify_py36 "$1" "${2:-3.7}"
 }
 
+# Post-install check for Python 3.8.x
+build_package_verify_py38() {
+  build_package_verify_py37 "$1" "${2:-3.8}"
+}
+
 build_package_ez_setup() {
   local ez_setup="ez_setup.py"
   rm -f "${ez_setup}"
@@ -1780,7 +1806,7 @@ build_package_ez_setup() {
       echo "Installing setuptools from ${EZ_SETUP}..." 1>&2
       cat "${EZ_SETUP}"
     else
-      [ -n "${EZ_SETUP_URL}" ] || EZ_SETUP_URL="https://bootstrap.pypa.io/ez_setup.py"
+      [ -n "${EZ_SETUP_URL}" ]
       echo "Installing setuptools from ${EZ_SETUP_URL}..." 1>&2
       http get "${EZ_SETUP_URL}"
     fi
@@ -1799,7 +1825,7 @@ build_package_get_pip() {
       echo "Installing pip from ${GET_PIP}..." 1>&2
       cat "${GET_PIP}"
     else
-      [ -n "${GET_PIP_URL}" ] || GET_PIP_URL="https://bootstrap.pypa.io/get-pip.py"
+      [ -n "${GET_PIP_URL}" ]
       echo "Installing pip from ${GET_PIP_URL}..." 1>&2
       http get "${GET_PIP_URL}"
     fi
@@ -2082,11 +2108,39 @@ if [ -e "$HOME/.pydistutils.cfg" ]; then
 fi
 
 # Download specified version of ez_setup.py/get-pip.py (#202)
-if [ -n "${SETUPTOOLS_VERSION}" ]; then
-  EZ_SETUP_URL="https://bitbucket.org/pypa/setuptools/raw/${SETUPTOOLS_VERSION}/ez_setup.py"
+if [ -z "${EZ_SETUP_URL}" ]; then
+  if [ -n "${SETUPTOOLS_VERSION}" ]; then
+    EZ_SETUP_URL="https://bitbucket.org/pypa/setuptools/raw/${SETUPTOOLS_VERSION}/ez_setup.py"
+    unset SETUPTOOLS_VERSION
+  else
+    EZ_SETUP_URL="https://bootstrap.pypa.io/ez_setup.py"
+  fi
 fi
-if [ -n "${PIP_VERSION}" ]; then
-  GET_PIP_URL="https://raw.githubusercontent.com/pypa/pip/${PIP_VERSION}/contrib/get-pip.py"
+if [ -z "${GET_PIP_URL}" ]; then
+  if [ -n "${PIP_VERSION}" ]; then
+    { colorize 1 "WARNING"
+      echo ": Setting PIP_VERSION=${PIP_VERSION} is no longer supported and may cause failures during the install process."
+    } 1>&2
+    GET_PIP_URL="https://raw.githubusercontent.com/pypa/pip/${PIP_VERSION}/contrib/get-pip.py"
+    # Unset `PIP_VERSION` from environment before invoking `get-pip.py` to deal with "ValueError: invalid truth value" (pypa/pip#4528)
+    unset PIP_VERSION
+  else
+    # Use custom get-pip URL based on the target version (#1127)
+    case "${DEFINITION_PATH##*/}" in
+    2.6 | 2.6.* )
+      GET_PIP_URL="https://bootstrap.pypa.io/2.6/get-pip.py"
+      ;;
+    3.2 | 3.2.* )
+      GET_PIP_URL="https://bootstrap.pypa.io/3.2/get-pip.py"
+      ;;
+    3.3 | 3.3.* )
+      GET_PIP_URL="https://bootstrap.pypa.io/3.3/get-pip.py"
+      ;;
+    * )
+      GET_PIP_URL="https://bootstrap.pypa.io/get-pip.py"
+      ;;
+    esac
+  fi
 fi
 
 # Set MACOSX_DEPLOYMENT_TARGET from the product version of OS X (#219, #220)
