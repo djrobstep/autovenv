@@ -31,6 +31,9 @@ lint:
 	flake8 autovenv
 	flake8 tests
 
+fmt:
+	black .
+
 docs:
 	cd docs && make clean && make html
 

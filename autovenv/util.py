@@ -14,25 +14,23 @@ if not PY2:
 def shquote(string):
     if PY2:
         import pipes
+
         return pipes.quote(string)
     else:
         import shlex
+
         return shlex.quote(string)
 
 
 def to_string(x):
     if isinstance(x, six.binary_type):
-        return x.decode('utf-8')
+        return x.decode("utf-8")
     return x
 
 
 def jsondump(x):
-    j = json.dumps(
-        x,
-        sort_keys=True,
-        indent=4,
-        separators=(',', ': '))
-    return to_string(j) + '\n'
+    j = json.dumps(x, sort_keys=True, indent=4, separators=(",", ": "))
+    return to_string(j) + "\n"
 
 
 def file_exists(fpath):
@@ -45,22 +43,21 @@ def resolve_path(p):
 
 def unresolve(path, homepath):
     if path.startswith(homepath):
-        path = path.replace(homepath, '~', 1)
+        path = path.replace(homepath, "~", 1)
     return path
 
 
 def create_symlink(
-        target,
-        link_name,
-        fail_if_exists=False,
-        temporary_suffix='_temporary_symlink'):
+    target, link_name, fail_if_exists=False, temporary_suffix="_temporary_symlink"
+):
     """
     Creates a symlink. If a symlink of this link name already exists, replace it.
     """
 
     if fail_if_exists and file_exists(link_name):
         raise OSError(
-            "won't create symlink cos file already exists: {}".format(link_name))
+            "won't create symlink cos file already exists: {}".format(link_name)
+        )
 
     tempname = link_name + temporary_suffix
     os.symlink(target, tempname)
