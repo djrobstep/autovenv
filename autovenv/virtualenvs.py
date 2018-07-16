@@ -21,7 +21,7 @@ import appdirs
 import six
 import yaml
 
-from .util import mkdir_p, create_symlink, resolve_path, file_exists, jsondump, to_string, unresolve
+from .util import mkdir_p, create_symlink, resolve_path, file_exists, jsondump, to_string, unresolve, shquote
 
 
 
@@ -119,7 +119,11 @@ class VirtualEnvs(object):
         self.cwd = resolve_path(cwd or CWD)
 
         self.configpath = os.path.join(self.data_dir, 'config')
-        self.pyversionspath = os.path.join(self.data_dir, 'pyversions')
+
+        if sys.platform == 'darwin':
+            self.pyversionspath = os.path.join(self.home, '.pyversions')
+        else:
+            self.pyversionspath = os.path.join(self.data_dir, 'pyversions')
         self.venvspath = os.path.join(self.data_dir, 'venvs')
         mkdir_p(self.venvspath)
 
@@ -287,7 +291,7 @@ class VirtualEnvs(object):
         p_pyvenv = self.pyvenv_path
 
         if os.path.exists(p_python):
-            return 'virtualenv -p {}'.format(p_python)
+            return 'virtualenv -p {}'.format(shquote(p_python))
         elif os.path.exists(p_pyvenv):
             return p_pyvenv
 
@@ -361,7 +365,7 @@ class VirtualEnvs(object):
 
                 s = "{} {}; "
                 command += s.format(self.virtualenv_creation_prefix,
-                                    self.correct_venv_path)
+                                    shquote(self.correct_venv_path))
 
             if not self.correct_venv_active:
                 if shell == 'fish':
@@ -369,9 +373,10 @@ class VirtualEnvs(object):
                 else:
                     extension = ''
 
-                command += 'source {0}{1}'.format(self.activate_path(
+                path = '{0}{1}'.format(self.activate_path(
                     self.correct_venv_name), extension)
 
+                command += 'source {0}'.format(shquote(path))
 
             if command:
                 if shell == 'bash':
@@ -382,7 +387,6 @@ class VirtualEnvs(object):
         elif self.current_venv_name:
             command = "echo 'AUTOVENV: deactivating...' ; deactivate"
 
-            #if shell == 'bash':
             command = 'eval ' + command
             return command
         return ''

@@ -11,6 +11,15 @@ if not PY2:
     unicode = str
 
 
+def shquote(string):
+    if PY2:
+        import pipes
+        return pipes.quote(string)
+    else:
+        import shlex
+        return shlex.quote(string)
+
+
 def to_string(x):
     if isinstance(x, six.binary_type):
         return x.decode('utf-8')

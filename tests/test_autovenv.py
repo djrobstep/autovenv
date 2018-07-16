@@ -93,8 +93,8 @@ def test_autovenv(monkeypatch, tmpdir):
     venv_loc = str(VENVS_HOME / v.correct_venv_name)
 
     EXPECTED = "eval echo 'AUTOVENV: creating virtual environment: c'; " + \
-        "virtualenv -p {executable} {venv}; source {venv}/bin/activate"
-    # print(v.current_pythonbuild_name)
+        "virtualenv -p '{executable}' {venv}; source {venv}/bin/activate"
+
     assert v.suggested_bash_command == EXPECTED.format(
         venv=venv_loc,
         executable=sys.executable)
@@ -102,7 +102,7 @@ def test_autovenv(monkeypatch, tmpdir):
     # test with python-build functionality
 
     # assert v.pythonbuilds_current == str(PYTHONBUILDS_CURRENT)
-    assert v.virtualenv_creation_prefix == 'virtualenv -p {}'.format(
+    assert v.virtualenv_creation_prefix == "virtualenv -p '{}'".format(
         sys.executable)
 
     assert v.current_pythonbuild_name is None
