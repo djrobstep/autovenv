@@ -1,0 +1,28 @@
+[tool.poetry]
+name = "autovenv"
+version = "0.1"
+authors = [ "Robert Lechte <robertlechte@gmail.com>",]
+license = "Unlicense"
+readme = "README.md"
+description = "virtualenv with less hassle"
+
+repository = "https://github.com/djrobstep/autovenv"
+homepage = "https://github.com/djrobstep/autovenv"
+
+[tool.poetry.dependencies]
+python = "*"
+psycopg2-binary = "*"
+logx = "*"
+
+[tool.poetry.dev-dependencies]
+sqlbag = "*"
+pytest = "*"
+pytest-cov = "*"
+pytest-xdist = "*"
+pytest-sugar = "*"
+tox = "*"
+flake8 = "*"
+twine = "*"
+wheel = "*"
+isort = "*"
+black = "*"
