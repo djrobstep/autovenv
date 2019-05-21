@@ -1,6 +1,6 @@
 from __future__ import absolute_import, division, print_function, unicode_literals
 
-from pathlib import Path
+from pathlib2 import Path
 
 import os
 import sys

@@ -7,7 +7,7 @@ import io
 import autovenv
 from autovenv import get_likely_projfolder as pf, file_exists, DEFAULT_CONFIG
 
-from pathlib import Path
+from pathlib2 import Path
 
 
 def test_autovenv(monkeypatch, tmpdir):
