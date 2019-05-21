@@ -7,7 +7,7 @@ import io
 import autovenv
 from autovenv import get_likely_projfolder as pf, file_exists, DEFAULT_CONFIG
 
-from pathlib2 import Path
+from pathlib import Path
 
 
 def test_autovenv(monkeypatch, tmpdir):
@@ -95,7 +95,7 @@ def test_autovenv(monkeypatch, tmpdir):
 
     EXPECTED = (
         "eval echo 'AUTOVENV: creating virtual environment: c'; "
-        + "virtualenv -p '{executable}' {venv}; source {venv}/bin/activate"
+        + "virtualenv -p {executable} {venv}; source {venv}/bin/activate"
     )
 
     assert v.suggested_bash_command == EXPECTED.format(
@@ -105,7 +105,7 @@ def test_autovenv(monkeypatch, tmpdir):
     # test with python-build functionality
 
     # assert v.pythonbuilds_current == str(PYTHONBUILDS_CURRENT)
-    assert v.virtualenv_creation_prefix == "virtualenv -p '{}'".format(sys.executable)
+    assert v.virtualenv_creation_prefix == "virtualenv -p {}".format(sys.executable)
 
     assert v.current_pythonbuild_name is None
     os.symlink(str(PYTHONBUILDS_VERSION), str(PYTHONBUILDS_CURRENT))

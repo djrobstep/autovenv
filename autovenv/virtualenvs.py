@@ -1,6 +1,6 @@
 from __future__ import absolute_import, division, print_function, unicode_literals
 
-from pathlib2 import Path
+from pathlib import Path
 
 import os
 import sys
@@ -134,7 +134,7 @@ class VirtualEnvs(object):
     def load_config(self):
         try:
             text = Path(self.configpath).read_text()
-            return yaml.load(text)
+            return yaml.safe_load(text)
         except IOError as exc:
             if exc.errno == errno.ENOENT:
                 return None
