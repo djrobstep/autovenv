@@ -1,4 +1,3 @@
-
 import sys
 import argparse
 
@@ -15,6 +14,7 @@ def parse_args(args):
         recreate=False,
         builddefspath=False,
         pyversionspath=False,
+        pyversionspath_framework=False,
     )
     subparsers = parser.add_subparsers()
 
@@ -52,6 +52,12 @@ def parse_args(args):
         "pyversionspath", help="returns the path where built python versions are stored"
     )
     pyversionspath.set_defaults(pyversionspath=True)
+
+    pyversionspath_framework = subparsers.add_parser(
+        "pyversionspath_framework",
+        help="returns the path where built python versions are stored, if they are framework builds",
+    )
+    pyversionspath_framework.set_defaults(pyversionspath_framework=True)
 
     choose = subparsers.add_parser("choose", help="set your preferred python version")
     choose.add_argument(

@@ -2,7 +2,6 @@ from __future__ import absolute_import, division, print_function, unicode_litera
 
 import os
 import sys
-import io
 
 import autovenv
 from autovenv import get_likely_projfolder as pf, file_exists, DEFAULT_CONFIG
@@ -35,26 +34,24 @@ def test_autovenv(monkeypatch, tmpdir):
     PYTHONBUILDS = DATA_DIR / "pythonbuilds"
     PYTHONBUILDS_VERSION = PYTHONBUILDS / "10.11.12"
     PYTHONBUILDS_VERSION_BIN = PYTHONBUILDS / "10.11.12/bin"
-    PYTHONBUILDS_VERSION_BIN_PYTHON = PYTHONBUILDS / "10.11.12/bin/python"
-    PYTHONBUILDS_VERSION_BIN_PYVENV = PYTHONBUILDS / "10.11.12/bin/pyvenv"
+    # PYTHONBUILDS_VERSION_BIN_PYTHON = PYTHONBUILDS / "10.11.12/bin/python"
+    # PYTHONBUILDS_VERSION_BIN_PYVENV = PYTHONBUILDS / "10.11.12/bin/pyvenv"
     PYTHONBUILDS_CURRENT = PYTHONBUILDS / "current"
 
-    PYTHONBUILDS_CURRENT_BIN_PYTHON = PYTHONBUILDS / "current/bin/python"
-    PYTHONBUILDS_CURRENT_BIN_PYVENV = PYTHONBUILDS / "current/bin/pyvenv"
+    # PYTHONBUILDS_CURRENT_BIN_PYTHON = PYTHONBUILDS / "current/bin/python"
+    # PYTHONBUILDS_CURRENT_BIN_PYVENV = PYTHONBUILDS / "current/bin/pyvenv"
 
-    PYTHONBUILDS_OTHERVERSION_BIN_PYTHON = PYTHONBUILDS / "10.11.13/bin/python"
-    PYTHONBUILDS_OTHERVERSION_BIN_PYVENV = PYTHONBUILDS / "10.11.13/bin/pyvenv"
+    # PYTHONBUILDS_OTHERVERSION_BIN_PYTHON = PYTHONBUILDS / "10.11.13/bin/python"
+    # PYTHONBUILDS_OTHERVERSION_BIN_PYVENV = PYTHONBUILDS / "10.11.13/bin/pyvenv"
 
     if sys.platform == "darwin":
         VENVS_HOME = HOME / ".autovenv"
     else:
         VENVS_HOME = DATA_DIR / "venvs"
 
-    PYTHONVERSION_FILE_PATH = PROJFOLDER / ".python-version"
+    # PYTHONVERSION_FILE_PATH = PROJFOLDER / ".python-version"
 
     VIRTUAL_ENV = None
-
-    environ_get_original = os.environ.get
 
     def environget(name, default=None):
         if name == "VIRTUAL_ENV":
@@ -76,7 +73,7 @@ def test_autovenv(monkeypatch, tmpdir):
 
     assert pf(str(DEEPEST), str(tmpdir), config=DEFAULT_CONFIG) == str(PROJFOLDER)
     assert pf(str(DEEPEST), str(HOME), config=DEFAULT_CONFIG) == str(PROJFOLDER)
-    assert pf(str(DEEPEST), str(DEEPEST), config=DEFAULT_CONFIG) == None  # flake8: noqa
+    assert pf(str(DEEPEST), str(DEEPEST), config=DEFAULT_CONFIG) is None
 
     v = autovenv.VirtualEnvs(
         data_dir=str(DATA_DIR), home=str(HOME), cwd=str(PROJFOLDER)
@@ -93,10 +90,9 @@ def test_autovenv(monkeypatch, tmpdir):
 
     venv_loc = str(VENVS_HOME / v.correct_venv_name)
 
-    EXPECTED = (
-        "eval echo 'AUTOVENV: creating virtual environment: c'; "
-        + "virtualenv -p {executable} {venv}; source {venv}/bin/activate"
-    )
+    C1 = "eval echo 'AUTOVENV: creating virtual environment: c'; "
+    C2 = "virtualenv -p {executable} {venv}; source {venv}/bin/activate"
+    EXPECTED = C1 + C2
 
     assert v.suggested_bash_command == EXPECTED.format(
         venv=venv_loc, executable=sys.executable

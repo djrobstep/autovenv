@@ -5,10 +5,14 @@ import json
 import sys
 import six
 
+
 PY2 = sys.version_info[0] < 3
 
 if not PY2:
     unicode = str
+    from pathlib import Path
+else:
+    from pathlib2 import Path
 
 
 def shquote(string):
@@ -37,8 +41,16 @@ def file_exists(fpath):
     return os.path.exists(fpath)
 
 
+def resolve_path_pathlib(p):
+    p = Path(p).expanduser().resolve()
+    real = os.path.realpath(str(p))
+    real = Path(real)
+    return real
+
+
 def resolve_path(p):
-    return os.path.realpath(os.path.abspath(os.path.expanduser(p)))
+    p = resolve_path_pathlib(p)
+    return str(p)
 
 
 def unresolve(path, homepath):

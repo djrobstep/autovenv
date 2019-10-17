@@ -2,8 +2,21 @@
 
 set -e
 
-if brew --prefix openssl &>/dev/null; then
-  OPENSSL_ROOT=$(brew --prefix openssl)
-  export PYTHON_CONFIGURE_OPTS="CPPFLAGS=-I"$OPENSSL_ROOT"/include LDFLAGS=-L"$OPENSSL_ROOT"/lib"
+if [[ $EUID -ne 0 ]]; then
+    FRAMEWORK=''
+else
+    FRAMEWORK='--enable-framework'
+    echo 'Superuser, doing framework build...'
 fi
-PYTHON_BUILD_DEFINITIONS=`autovenv builddefspath` autovenv-python-build "$1" "`autovenv pyversionspath`/$1"
+
+if brew --prefix openssl &>/dev/null; then
+  OPENSSL_ROOT=$(brew --prefix openssl@1.1)
+  export PYTHON_CONFIGURE_OPTS="$FRAMEWORK CPPFLAGS=-I"$OPENSSL_ROOT"/include CFLAGS=-I"$OPENSSL_ROOT"/include LDFLAGS=-L"$OPENSSL_ROOT"/lib"
+  echo $PYTHON_CONFIGURE_OPTS
+fi
+
+if [[ $EUID -ne 0 ]]; then
+   PYTHON_BUILD_DEFINITIONS=`autovenv builddefspath` autovenv-python-build --verbose "$1" "`autovenv pyversionspath`/$1"
+else
+   PYTHON_BUILD_DEFINITIONS=`autovenv builddefspath` autovenv-python-build --verbose "$1" "`autovenv pyversionspath_framework`/$1"
+fi

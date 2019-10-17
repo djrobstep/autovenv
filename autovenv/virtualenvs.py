@@ -21,6 +21,7 @@ from .util import (
     mkdir_p,
     create_symlink,
     resolve_path,
+    resolve_path_pathlib,
     jsondump,
     to_string,
     unresolve,
@@ -116,17 +117,30 @@ class VirtualEnvs(object):
     def __init__(self, data_dir=None, home=None, cwd=None):
         self.data_dir = resolve_path(data_dir or DATA_DIR)
         self.home = resolve_path(home or HOME)
-        self.cwd = resolve_path(cwd or CWD)
+        self.cwd_pathlib = resolve_path_pathlib(cwd or CWD)
+        self.cwd = str(self.cwd_pathlib)
 
         self.configpath = os.path.join(self.data_dir, "config")
 
-        if sys.platform == "darwin":
-            self.pyversionspath = os.path.join(self.home, ".pyversions")
-            self.venvspath = os.path.join(self.home, ".autovenv")
+        if self.should_use_framework_build:
+            pvname = "pyversions-framework"
         else:
-            self.pyversionspath = os.path.join(self.data_dir, "pyversions")
+            pvname = "pyversions"
+
+        if sys.platform == "darwin":
+            pvname = "." + pvname
+
+            self.pyversionspath = os.path.join(self.home, pvname)
+            self.venvspath = os.path.join(self.home, ".autovenv")
+
+        else:
+            self.pyversionspath = os.path.join(self.data_dir, pvname)
             self.venvspath = os.path.join(self.data_dir, "venvs")
         mkdir_p(self.venvspath)
+
+        self.pyversionspath_framework = self.pyversionspath.replace(
+            "pyversions", "pyversions-framework"
+        )
 
         self.config = self.get_config()
         self.save_config(self.config)
@@ -271,32 +285,28 @@ class VirtualEnvs(object):
             return os.path.join(self.pyversionspath, self.current_pythonbuild_name)
 
     @property
-    def python_path(self):
-        p = self.pythonversion_path
-        if p:
-            return os.path.join(p, "bin/python")
-        else:
-            return sys.executable
+    def shortversion(self):
+        version = self.current_pythonbuild_name
+        version_tokens = version.split(".")
+        short = ".".join(version_tokens[:2])
+        return short
 
     @property
-    def pyvenv_path(self):
+    def python_path(self):
         p = self.pythonversion_path
+
         if p:
-            return os.path.join(p, "bin/pyvenv")
+            suffix = "bin/python"
+            return os.path.join(p, suffix)
         else:
-            return ""
+            return sys.executable
 
     @property
     def virtualenv_creation_prefix(self):
         p_python = self.python_path
 
-        # try using in-built if proper virtualenv isn't installed for some reason
-        p_pyvenv = self.pyvenv_path
-
         if os.path.exists(p_python):
-            return "virtualenv -p {}".format(shquote(p_python))
-        elif os.path.exists(p_pyvenv):
-            return p_pyvenv
+            return "{} -m venv".format(shquote(p_python))
 
         raise ValueError("something went wrong finding a python")
 
@@ -321,12 +331,12 @@ class VirtualEnvs(object):
 
         if os.path.exists(self.pythonversion_file_path):
             with io.open(self.pythonversion_file_path) as f:
-                version_string = f.read().strip()
+                version_string = f.read().splitlines()[0].strip()
                 if version_string:
                     return version_string
 
         for k, v in self.config["override"].items():
-            if self.cwd.startswith(k):
+            if self.cwd_pathlib.name.startswith(k):
                 pyversion = v["pyversion"]
                 if pyversion:
                     return pyversion
@@ -334,6 +344,16 @@ class VirtualEnvs(object):
         if os.path.exists(self.pythonbuilds_current):
             realpath = os.path.realpath(self.pythonbuilds_current)
             return os.path.split(realpath)[1]
+
+    @property
+    def should_use_framework_build(self):
+        if os.path.exists(self.pythonversion_file_path):
+            with io.open(self.pythonversion_file_path) as f:
+                contents = f.read().strip().splitlines()
+                if "use_framework_build" in contents:
+                    return True
+
+        return False
 
     @property
     def suggested_bash_command(self):
@@ -424,15 +444,27 @@ class VirtualEnvs(object):
                 print("...which is really at: {}".format(os.path.realpath(p)))
             else:
                 print("Using system python")
-            # print(self.config['overrides'])
-            print("Config and data stored in: ".format(self.data_dir))
+
+            print("Config and data stored in: {}".format(self.data_dir))
+
+            fb = self.should_use_framework_build
+            print("Using framework build?: {}".format(fb))
+
+            pypath = self.pythonversion_path
+
+            print("Looking for a python version at: {}".format(pypath))
+            print("Exists?: {}".format(os.path.exists(pypath)))
             print("Current config:")
             print(self.config)
+
+            print("Suggested command: {}".format(self.suggested_command()))
 
         elif args.builddefspath:
             print(self.build_defs_path)
         elif args.pyversionspath:
             print(self.pyversionspath)
+        elif args.pyversionspath_framework:
+            print(self.pyversionspath_framework)
         elif args.python_version:
             target = os.path.join(self.pyversionspath, args.python_version)
             rel_target = os.path.relpath(target, self.pyversionspath)
