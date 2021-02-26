@@ -19,6 +19,8 @@ PYTHON_BUILD_VERSION="20180424"
 OLDIFS="$IFS"
 
 set -E
+[ -n "$PYENV_DEBUG" ] && set -x
+
 exec 3<&2 # preserve original stderr at fd 3
 
 
@@ -995,7 +997,12 @@ build_package_activepython() {
 
 anaconda_architecture() {
   case "$(uname -s)" in
-  "Darwin" ) echo "MacOSX-x86_64" ;;
+  "Darwin" )
+    case "$(uname -m)" in
+    "arm64" ) echo "MacOSX-arm64" ;;
+    * ) echo "MacOSX-x86_64" ;;
+    esac
+    ;;
   "Linux" )
     case "$(uname -m)" in
     "armv7l" ) echo "Linux-armv7l" ;;
@@ -1493,6 +1500,9 @@ use_xcode_sdk_zlib() {
   if [ -d "$xc_sdk_path" ]; then
     echo "python-build: use zlib from xcode sdk"
     export CFLAGS="-I${xc_sdk_path}/usr/include ${CFLAGS}"
+    if is_mac -ge 1100; then
+      export LDFLAGS="${LDFLAGS} -L${xc_sdk_path}/usr/lib"
+    fi
   fi
 }
 
@@ -2082,11 +2092,20 @@ if [ -z "${GET_PIP_URL}" ]; then
     2.6 | 2.6.* )
       GET_PIP_URL="https://bootstrap.pypa.io/2.6/get-pip.py"
       ;;
+    2.7 | 2.7.* )
+      GET_PIP_URL="https://bootstrap.pypa.io/2.7/get-pip.py"
+      ;;
     3.2 | 3.2.* )
       GET_PIP_URL="https://bootstrap.pypa.io/3.2/get-pip.py"
       ;;
     3.3 | 3.3.* )
       GET_PIP_URL="https://bootstrap.pypa.io/3.3/get-pip.py"
+      ;;
+    3.4 | 3.4.* )
+      GET_PIP_URL="https://bootstrap.pypa.io/3.4/get-pip.py"
+      ;;
+    3.5 | 3.5.* )
+      GET_PIP_URL="https://bootstrap.pypa.io/3.5/get-pip.py"
       ;;
     * )
       GET_PIP_URL="https://bootstrap.pypa.io/get-pip.py"
