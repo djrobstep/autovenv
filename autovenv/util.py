@@ -2,32 +2,17 @@ import os
 import errno
 
 import json
-import sys
-import six
+import shlex
 
-
-PY2 = sys.version_info[0] < 3
-
-if not PY2:
-    unicode = str
-    from pathlib import Path
-else:
-    from pathlib2 import Path
+from pathlib import Path
 
 
 def shquote(string):
-    if PY2:
-        import pipes
-
-        return pipes.quote(string)
-    else:
-        import shlex
-
-        return shlex.quote(string)
+    return shlex.quote(string)
 
 
 def to_string(x):
-    if isinstance(x, six.binary_type):
+    if isinstance(x, bytes):
         return x.decode("utf-8")
     return x
 

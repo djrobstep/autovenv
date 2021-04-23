@@ -1,6 +1,4 @@
-from __future__ import absolute_import, division, print_function, unicode_literals
-
-from pathlib2 import Path
+from pathlib import Path
 
 import os
 import sys
@@ -249,9 +247,7 @@ class VirtualEnvs(object):
         return os.path.join(self.venv_path(name), "bin/pip")
 
     def make_virtualenv(self, name):
-        """Make a new virtual environment with the given name.
-
-        """
+        """Make a new virtual environment with the given name."""
         new_path = self.venv_path(name)
 
         tokens = shlex.split(self.virtualenv_creation_prefix)

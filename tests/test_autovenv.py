@@ -1,12 +1,10 @@
-from __future__ import absolute_import, division, print_function, unicode_literals
-
 import os
 import sys
 
 import autovenv
 from autovenv import get_likely_projfolder as pf, file_exists, DEFAULT_CONFIG
 
-from pathlib2 import Path
+from pathlib import Path
 
 
 def test_autovenv(monkeypatch, tmpdir):
