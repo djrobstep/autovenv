@@ -58,7 +58,7 @@ lib "$1"
 
 
 resolve_link() {
-  $(type -p greadlink readlink | head -1) "$1"
+  $(type -P greadlink readlink | head -1) "$1"
 }
 
 abs_dirname() {
@@ -130,13 +130,13 @@ build_failed() {
 
     if ! rmdir "${BUILD_PATH}" 2>/dev/null; then
       echo "Inspect or clean up the working tree at ${BUILD_PATH}"
+    fi
 
-      if file_is_not_empty "$LOG_PATH"; then
-        colorize 33 "Results logged to ${LOG_PATH}"
-        printf "\n\n"
-        echo "Last 10 log lines:"
-        tail -n 10 "$LOG_PATH"
-      fi
+    if file_is_not_empty "$LOG_PATH"; then
+      colorize 33 "Results logged to ${LOG_PATH}"
+      printf "\n\n"
+      echo "Last 10 log lines:"
+      tail -n 10 "$LOG_PATH"
     fi
   } >&3
   exit 1
@@ -417,8 +417,8 @@ fetch_tarball() {
    fi
 
   if ! reuse_existing_tarball "$package_filename" "$checksum"; then
-    local tarball_filename="$(basename "$package_url")"
-    echo "Downloading ${tarball_filename}..." >&2
+    # Report the cached file name -- sometimes, it's useful to know (#1743)
+    echo "Downloading ${package_filename}..." >&2
     http head "$mirror_url" &&
     download_tarball "$mirror_url" "$package_filename" "$checksum" ||
     download_tarball "$package_url" "$package_filename" "$checksum"
@@ -805,7 +805,7 @@ build_package_standard() {
 }
 
 build_package_autoconf() {
-  { autoconf
+  { autoreconf
   } >&4 2>&1
 }
 
@@ -851,12 +851,21 @@ build_package_jython_builder() {
 }
 
 build_package_pyston() {
-  mkdir -p "${PREFIX_PATH}/"
-  cp -fR . "${PREFIX_PATH}/"
-  chmod +x "${PREFIX_PATH}/"pyston
-  # FIXME ugly hack below adapted from
-  # https://github.com/dropbox/pyston/blob/master/docker/pyston/Dockerfile
-  ( cd "${PREFIX_PATH}/" && ./pyston virtualenv/virtualenv.py . )
+  # currently supported version 2.2 and upper
+  build_package_copy
+  mkdir -p "${PREFIX_PATH}/bin" "${PREFIX_PATH}/lib"
+  local bin
+  shopt -s nullglob
+  for bin in "bin/"*; do
+    if [ -f "${bin}" ] && [ -x "${bin}" ] && [ ! -L "${bin}" ]; then
+      case "${bin##*/}" in
+      "pyston"* )
+        ( cd "${PREFIX_PATH}/bin" && ln -fs "${bin##*/}" "python" )
+        ;;
+      esac
+    fi
+  done
+  shopt -u nullglob
 }
 
 build_package_ironpython() {
@@ -1485,7 +1494,7 @@ build_package_verify_openssl() {
       RbConfig::CONFIG.fetch("configure_args").shellsplit.each { |arg| $stderr.puts "  #{arg}" }
       exit 1
     end
-  ' "$(basename "$(type -p yum apt-get | head -1)")" >&4 2>&1
+  ' "$(basename "$(type -P yum apt-get | head -1)")" >&4 2>&1
 }
 
 use_homebrew_zlib() {
@@ -1505,21 +1514,6 @@ use_xcode_sdk_zlib() {
       export LDFLAGS="${LDFLAGS} -L${xc_sdk_path}/usr/lib"
     fi
   fi
-}
-
-# Ensure that directories listed in LDFLAGS exist
-build_package_ldflags_dirs() {
-  local arg dir
-  set - $LDFLAGS
-  while [ $# -gt 0 ]; do
-    dir=""
-    case "$1" in
-    -L  ) dir="$2" ;;
-    -L* ) dir="${1#-L}" ;;
-    esac
-    [ -z "$dir" ] || mkdir -p "$dir"
-    shift 1
-  done
 }
 
 build_package_enable_shared() {
@@ -1560,7 +1554,7 @@ build_package_symlink_version_suffix() {
       mv -f "${PREFIX_PATH}/bin" "${PREFIX_PATH}/bin.orig"
     fi
     # Only symlinks are installed in ${PREFIX_PATH}/bin
-    ln -fs "${PREFIX_PATH}/Python.framework/Versions/Current/bin" "${PREFIX_PATH}/bin"
+    ln -fs "${PREFIX_PATH}/Library/Frameworks/Python.framework/Versions/Current/bin" "${PREFIX_PATH}/bin"
   fi
 
   # Not create symlinks on `altinstall` (#255)
@@ -1746,6 +1740,18 @@ build_package_verify_py39() {
 # Post-install check for Python 3.10.x
 build_package_verify_py310() {
   build_package_verify_py39 "$1" "${2:-3.10}"
+}
+
+# Post-install check for Python 3.11.x
+build_package_verify_py311() {
+  build_package_verify_py310 "$1" "${2:-3.11}"
+}
+
+# Post-install check for Python 3.x rolling release scripts
+# XXX: Will need splitting into project-specific ones if there emerge
+# multiple rolling-release scripts with different checks needed
+build_package_verify_py3_latest() {
+  build_package_verify_py311 "$1" "3"
 }
 
 # Copy Tools/gdb/libpython.py to pythonX.Y-gdb.py (#1190)
@@ -2010,16 +2016,17 @@ if [[ "$PYTHON_CONFIGURE_OPTS" == *"--enable-framework"* ]]; then
   fi
   create_framework_dirs() {
     local version="$(echo "$1" | sed -E 's/^[^0-9]*([0-9]+\.[0-9]+).*$/\1/')"
-    mkdir -p "${PREFIX_PATH}/Python.framework/Versions/${version}"
-    ( cd "${PREFIX_PATH}/Python.framework/Versions" && ln -fs "${version}" "Current")
+    mkdir -p "${PREFIX_PATH}/Library/Frameworks/Python.framework/Versions/${version}"
+    ( cd "${PREFIX_PATH}/Library/Frameworks/Python.framework/Versions" && ln -fs "${version}" "Current")
     local path
     for path in include lib share; do
-      mkdir -p "${PREFIX_PATH}/Python.framework/Versions/Current/${path}"
-      ln -fs "${PREFIX_PATH}/Python.framework/Versions/Current/${path}" "${PREFIX_PATH}/${path}"
+      mkdir -p "${PREFIX_PATH}/Library/Frameworks/Python.framework/Versions/Current/${path}"
+      ln -fs "${PREFIX_PATH}/Library/Frameworks/Python.framework/Versions/Current/${path}" "${PREFIX_PATH}/${path}"
     done
   }
   create_framework_dirs "${DEFINITION_PATH##*/}"
-  package_option python configure --enable-framework="${PREFIX_PATH}"
+  # the `/Library/Frameworks` suffix makes CPython build install apps under prefix rather than into /Applications (#1003)
+  package_option python configure --enable-framework="${PREFIX_PATH}/Library/Frameworks"
 fi
 
 # Build against universal SDK (#219, #220)
