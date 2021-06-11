@@ -251,17 +251,25 @@ class VirtualEnvs(object):
         new_path = self.venv_path(name)
 
         tokens = shlex.split(self.virtualenv_creation_prefix)
-        tokens.append(new_path)
 
+        tokens.append('--upgrade-deps')
+        tokens.append(new_path)
+        
         if not os.path.isdir(new_path):
-            subprocess.call(tokens)
+            pth = tokens[0][:-len('/python')]
+            cmd = ' '.join(tokens)
+            print(f'CREATING VENV, using command: {cmd}')
+            subprocess.run(cmd, env={'PATH': pth}, shell=True)
         else:
             print("PROBLEM: A virtualenv already exists at", new_path)
 
     def delete_virtualenv(self, name):
         path = self.venv_path(name)
         print("DELETING VIRTUALENV:", path)
-        shutil.rmtree(path)
+        try:
+            shutil.rmtree(path)
+        except FileNotFoundError:
+            pass
 
     @property
     def venv_active(self):
@@ -324,7 +332,7 @@ class VirtualEnvs(object):
         If neither of these two conditions apply, this will
         return None, and so the system python will be used.
         """
-
+        
         if os.path.exists(self.pythonversion_file_path):
             with io.open(self.pythonversion_file_path) as f:
                 version_string = f.read().splitlines()[0].strip()
