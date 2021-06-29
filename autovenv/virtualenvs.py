@@ -32,7 +32,7 @@ CWD = os.getcwd()
 
 dirs = appdirs.AppDirs("autovenv", "djrobstep")
 
-DATA_DIR = dirs.user_data_dir
+DATA_DIR = HOME + '/' + '.autovenv'
 
 RECREATE_ERROR = "AUTOVENV: ERROR (not within a python project)"
 
@@ -80,7 +80,7 @@ def get_likely_projfolder(fpath, home, config=None):
         return likely_projfolder
 
 
-DEFAULT_CONFIG = {"file_names": ["requirements.txt"]}
+DEFAULT_CONFIG = {"file_names": ["requirements.txt", "pyproject.toml"]}
 
 
 def parse_override(v):
