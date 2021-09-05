@@ -26,6 +26,7 @@ stest:
 clean:
 #	git clean -fXd
 	find . -name \*.pyc -delete
+	rm -rf build dist
 
 lint:
 	flake8 autovenv
