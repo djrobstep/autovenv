@@ -112,6 +112,13 @@ is_mac() {
   [ $# -eq 0 ] || [ "$(osx_version)" "$@" ]
 }
 
+is_arm64_apple() {
+  if [ "$(uname -s)" = "Darwin" ] && [ "$(uname -m)" = "arm64" ]; then
+    return 0
+  fi
+  return 1
+}
+
 #  9.1  -> 901
 # 10.9  -> 1009
 # 10.10 -> 1010
@@ -766,6 +773,7 @@ build_package_standard_build() {
   local PACKAGE_CFLAGS="${package_var_name}_CFLAGS"
 
   if [ "$package_var_name" = "PYTHON" ]; then
+      use_tcltk || true
       use_homebrew_readline || use_freebsd_pkg || true
     if is_mac -ge 1014; then
       use_xcode_sdk_zlib || use_homebrew_zlib || true
@@ -850,8 +858,8 @@ build_package_jython_builder() {
   ( cd "dist" && build_package_jython )
 }
 
-build_package_pyston() {
-  # currently supported version 2.2 and upper
+build_package_pyston2.2() {
+  # currently supported version 2.2 and 2.3
   build_package_copy
   mkdir -p "${PREFIX_PATH}/bin" "${PREFIX_PATH}/lib"
   local bin
@@ -866,6 +874,11 @@ build_package_pyston() {
     fi
   done
   shopt -u nullglob
+}
+
+build_package_pyston() {
+  # currently supported version 2.3.1v2 and higher
+  build_package_copy
 }
 
 build_package_ironpython() {
@@ -1034,7 +1047,9 @@ build_package_anaconda() {
 
 build_package_miniconda() {
   build_package_anaconda "$@"
-  "${PREFIX_PATH}/bin/conda" install --yes "pip"
+  # Workaround to not upgrade conda when installing pip
+  # see https://github.com/pyenv/pyenv/issues/2070
+  "${PREFIX_PATH}/bin/conda" install --yes "pip" "conda=$(${PREFIX_PATH}/bin/conda --version | cut -d ' ' -f 2)"
 }
 
 build_package_copy() {
@@ -1516,6 +1531,98 @@ use_xcode_sdk_zlib() {
   fi
 }
 
+use_homebrew_tcltk() {
+  # get the version from the folder that homebrew versions
+  local tcltk_version_long="$(ls "$(brew --cellar tcl-tk)")"
+  local tcltk_version="${tcltk_version_long%.*}"
+  local tcltk_flags="--with-tcltk-includes=-I$tcltk_libdir/include --with-tcltk-libs=-L$tcltk_libdir/lib -ltcl$tcltk_version -ltk$tcltk_version"
+  echo "python-build: use tcl-tk from homebrew"
+  package_option python configure --with-tcltk-libs="-L$tcltk_libdir/lib -ltcl$tcltk_version -ltk$tcltk_version"
+  package_option python configure --with-tcltk-includes="-I$tcltk_libdir/include"
+}
+
+# FIXME: this function is a workaround for #1125
+# once fixed, it should be removed.
+use_custom_tcltk() {
+  local tcltk_ops="$1"
+  local tcltk_ops_flag="--with-tcltk-libs="
+  # get tcltk libs
+  local tcltk_libs="${tcltk_ops//$tcltk_ops_flag/}"
+  # remove tcltk-flag from configure_opts
+  # this allows for weird input such as
+  # --with-tcltk-libs='    -L/custom-tcl-tk/lib -ltcl8.6 -ltk8.4  '
+  PYTHON_CONFIGURE_OPTS="${PYTHON_CONFIGURE_OPTS//"$tcltk_ops_flag"/}"
+  PYTHON_CONFIGURE_OPTS="${PYTHON_CONFIGURE_OPTS//$tcltk_libs/}"
+
+  # remove quotes, because there mess up compilations
+  PYTHON_CONFIGURE_OPTS="${PYTHON_CONFIGURE_OPTS//"''"/}"
+  PYTHON_CONFIGURE_OPTS="${PYTHON_CONFIGURE_OPTS//'""'/}"
+
+  echo "python-build: use tcl-tk from \$PYTHON_CONFIGURE_OPTS"
+  # echo "PYTHON_CONFIGURE_OPTS=${PYTHON_CONFIGURE_OPTS}"
+  package_option python configure --with-tcltk-libs="${tcltk_libs}"
+  # IFS="$OLDIFS"
+}
+
+# FIXME: this function is a workaround for #1125
+# once fixed, it should be removed.
+# Get tcltk-flag and options from `$1`
+# expects one argument containing a string of configure opts, eg. `PYTHON_CONFIGURE_OPTS`
+# returns tcl_tk flag or an empty string if nothing was found.
+get_tcltk_flag_from() {
+  IFS=$'\n'
+  # parse input string into array
+  local opts_arr=( $(xargs -n1 <<<"$1") ) 
+
+  # iterate through `opts_arr`, break if `--with-tcltk-libs=` was found.
+  for opts in ${opts_arr[@]}; do
+    # `--with-tcltk-libs=` must be the prefix.
+    if [[ "$opts" == "--with-tcltk-libs="* ]]; then
+      # return 
+      echo "$opts"
+      break
+    fi
+  done
+
+  IFS="$OLDIFS"
+}
+
+use_tcltk() {
+  local tcltk_libdir="$(brew --prefix tcl-tk 2>/dev/null || true)"
+  local tcl_tk_libs="$(get_tcltk_flag_from "$PYTHON_CONFIGURE_OPTS")"
+
+  # if tcltk_ops_flag is in PYTHON_CONFIGURE_OPTS, use user provided tcltk
+  # otherwise default to homebrew-installed tcl-tk, if installed
+  if [[ -n "$tcl_tk_libs" ]]; then
+    use_custom_tcltk "$tcl_tk_libs"
+  elif [ -d "$tcltk_libdir" ]; then
+    use_homebrew_tcltk
+  fi
+}
+
+# CPython 3.9.1+ and 3.8.10+ have old config.sub that doesn't support "arm64" arch
+# which is what Gnu uname (but not Apple uname) produces on Apple M1
+# (https://github.com/pyenv/pyenv/pull/2020#issuecomment-891911842)
+build_package_arm64_apple_disable_homebrew_coreutils() {
+  if is_arm64_apple; then
+    local brew_coreutils="$(brew --prefix coreutils 2>/dev/null || true)"
+    if [ -d "$brew_coreutils" ]; then
+      local after_list=()
+      # Bash 3 ignores IFS set for command when doing expansions so have to set it separately
+      IFS=':'; local -a list=(${PATH}); IFS="$OLDIFS"
+      for str in "${list[@]}"; do
+        if [[ "$str" != "$brew_coreutils"/* ]]; then
+          after_list+=("$str")
+        else
+          echo "python-build: excluding \`$str' from PATH"
+        fi
+      done
+      # Bash 3 ignores IFS set for command when doing expansions so have to set it separately
+      IFS=':'; export PATH="${after_list[*]}"; IFS="$OLDIFS"
+    fi
+  fi
+}
+
 build_package_enable_shared() {
     package_option python configure --enable-shared
 }
@@ -1547,7 +1654,7 @@ apply_python_patch() {
 }
 
 build_package_symlink_version_suffix() {
-  if [[ "$PYTHON_CONFIGURE_OPTS" == *"--enable-framework"* ]]; then
+  if [[ "$CONFIGURE_OPTS $PYTHON_CONFIGURE_OPTS" == *"--enable-framework"* ]]; then
     if [ -e "${PREFIX_PATH}/bin" ]; then
       # Always create `bin` as symlink to framework path if the version was built with `--enable-frameowrk` (#590)
       rm -rf "${PREFIX_PATH}/bin.orig"
@@ -1996,7 +2103,7 @@ fi
 package_option python configure --libdir="${PREFIX_PATH}/lib"
 
 # python-build: Set `RPATH` if `--enable-shared` was given (#65, #66, #82)
-if [[ "$CONFIGURE_OPTS" == *"--enable-shared"* ]] || [[ "$PYTHON_CONFIGURE_OPTS" == *"--enable-shared"* ]]; then
+if [[ "$CONFIGURE_OPTS $PYTHON_CONFIGURE_OPTS" == *"--enable-shared"* ]]; then
   # The ld on Darwin embeds the full paths to each dylib by default
   if [[ "$LDFLAGS" != *"-rpath="* ]] && ! is_mac; then
     export LDFLAGS="-Wl,-rpath=${PREFIX_PATH}/lib ${LDFLAGS}"
@@ -2009,7 +2116,7 @@ if [[ "$PYPY_OPTS" == *"--shared"* ]]; then
 fi
 
 # Add support for framework installation (`--enable-framework`) of CPython (#55, #99)
-if [[ "$PYTHON_CONFIGURE_OPTS" == *"--enable-framework"* ]]; then
+if [[ "$CONFIGURE_OPTS $PYTHON_CONFIGURE_OPTS" == *"--enable-framework"* ]]; then
   if ! is_mac; then
     echo "python-build: framework installation is not supported." >&2
     exit 1
@@ -2030,7 +2137,7 @@ if [[ "$PYTHON_CONFIGURE_OPTS" == *"--enable-framework"* ]]; then
 fi
 
 # Build against universal SDK (#219, #220)
-if [[ "$PYTHON_CONFIGURE_OPTS" == *"--enable-universalsdk"* ]]; then
+if [[ "$CONFIGURE_OPTS $PYTHON_CONFIGURE_OPTS" == *"--enable-universalsdk"* ]]; then
   if ! is_mac; then
     echo "python-build: universal installation is not supported." >&2
     exit 1
@@ -2051,19 +2158,6 @@ if [[ "$PYTHON_CONFIGURE_OPTS" != *"--enable-unicode="* ]]; then
       ;;
     esac
   fi
-fi
-
-# regex_to_match="(--with-tcltk-libs='([^']+)')"
-if [[ "$PYTHON_CONFIGURE_OPTS" =~ (--with-tcltk-libs=\'([^\']+)\') ]]; then
-  tcltk_match="${BASH_REMATCH[1]}"
-  tcltk_match_quoted="${tcltk_match//--with-tcltk-libs=/}"
-  # remove it from PYTHON_CONFIGURE_OPTS since it will mess up compile
-  PYTHON_CONFIGURE_OPTS="${PYTHON_CONFIGURE_OPTS//$tcltk_match/}"
-
-  # having issues passing the single quoted part, couldnt pass as single var and still work
-  package_option python configure "--with-tcltk-libs='${tcltk_match_quoted}'"
-  unset tcltk_match
-  unset tcltk_match_quoted
 fi
 
 # Unset `PIP_REQUIRE_VENV` during build (#216)

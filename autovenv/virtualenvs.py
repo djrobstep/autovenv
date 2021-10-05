@@ -389,7 +389,8 @@ class VirtualEnvs(object):
 
                 command += s.format(wanted, version_info)
 
-                s = "{} {}; "
+                s = "{} --upgrade-deps {}; "
+                
                 command += s.format(
                     self.virtualenv_creation_prefix, shquote(self.correct_venv_path)
                 )
