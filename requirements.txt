@@ -2,13 +2,8 @@
 
 pytest
 pytest-cov
-pytest-sugar
 
 flake8
-tox
-
-pathlib
-sphinx
 
 wheel
 twine

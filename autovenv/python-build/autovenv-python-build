@@ -773,10 +773,13 @@ build_package_standard_build() {
   local PACKAGE_CFLAGS="${package_var_name}_CFLAGS"
 
   if [ "$package_var_name" = "PYTHON" ]; then
-      use_tcltk || true
-      use_homebrew_readline || use_freebsd_pkg || true
+    use_homebrew || true
+    use_tcltk || true
+    use_homebrew_readline || use_freebsd_pkg || true
     if is_mac -ge 1014; then
       use_xcode_sdk_zlib || use_homebrew_zlib || true
+    else
+      use_homebrew_zlib || true
     fi
   fi
 
@@ -858,7 +861,7 @@ build_package_jython_builder() {
   ( cd "dist" && build_package_jython )
 }
 
-build_package_pyston2.2() {
+build_package_pyston2_2() {
   # currently supported version 2.2 and 2.3
   build_package_copy
   mkdir -p "${PREFIX_PATH}/bin" "${PREFIX_PATH}/lib"
@@ -1325,6 +1328,19 @@ configured_with_package_dir() {
   return 1
 }
 
+use_homebrew() {
+  # unless Homebrew is at the default /usr/local, need to add its paths to
+  # compiler search to be able to use non-keg-only deps from there
+  if command -v brew &>/dev/null; then
+    local brew_prefix="$(brew --prefix 2>/dev/null || true)"
+    # /usr/local/lib:/usr/lib is the default library search path
+    if [[ -n $brew_prefix && $brew_prefix != "/usr" && $brew_prefix != "/usr/local" ]]; then
+      export CPPFLAGS="${CPPFLAGS:+${CPPFLAGS% } }-I${brew_prefix}/include"
+      export LDFLAGS="${LDFLAGS:+${LDFLAGS% } }-L${brew_prefix}/lib"
+    fi
+  fi
+}
+
 needs_yaml() {
   ! configured_with_package_dir "python" "yaml.h" &&
   ! use_homebrew_yaml
@@ -1533,12 +1549,13 @@ use_xcode_sdk_zlib() {
 
 use_homebrew_tcltk() {
   # get the version from the folder that homebrew versions
-  local tcltk_version_long="$(ls "$(brew --cellar tcl-tk)")"
-  local tcltk_version="${tcltk_version_long%.*}"
-  local tcltk_flags="--with-tcltk-includes=-I$tcltk_libdir/include --with-tcltk-libs=-L$tcltk_libdir/lib -ltcl$tcltk_version -ltk$tcltk_version"
-  echo "python-build: use tcl-tk from homebrew"
-  package_option python configure --with-tcltk-libs="-L$tcltk_libdir/lib -ltcl$tcltk_version -ltk$tcltk_version"
-  package_option python configure --with-tcltk-includes="-I$tcltk_libdir/include"
+  local tcltk_libdir="$(brew --prefix tcl-tk 2>/dev/null || true)"
+  if [ -d "$tcltk_libdir" ]; then
+    echo "python-build: use tcl-tk from homebrew"
+    local tcltk_version="$(sh -c '. '"$tcltk_libdir"'/lib/tclConfig.sh; echo $TCL_VERSION')"
+    package_option python configure --with-tcltk-libs="-L$tcltk_libdir/lib -ltcl$tcltk_version -ltk$tcltk_version"
+    package_option python configure --with-tcltk-includes="-I$tcltk_libdir/include"
+  fi
 }
 
 # FIXME: this function is a workaround for #1125
@@ -2136,13 +2153,21 @@ if [[ "$CONFIGURE_OPTS $PYTHON_CONFIGURE_OPTS" == *"--enable-framework"* ]]; the
   package_option python configure --enable-framework="${PREFIX_PATH}/Library/Frameworks"
 fi
 
-# Build against universal SDK (#219, #220)
+# Build against universal SDK
 if [[ "$CONFIGURE_OPTS $PYTHON_CONFIGURE_OPTS" == *"--enable-universalsdk"* ]]; then
   if ! is_mac; then
     echo "python-build: universal installation is not supported." >&2
     exit 1
   fi
-  package_option python configure --enable-universalsdk=/ --with-universal-archs=intel
+  package_option python configure --enable-universalsdk=/
+  if [[ "$CONFIGURE_OPTS $PYTHON_CONFIGURE_OPTS" != *"--enable-universal-archs"* ]]; then
+    # in CPython's configure.ac, --with-universal-archs defaults to 'intel' which means i386 + x86_64
+    # since 2.7.5 and 3.3.0 -- i.e. in all non-EOL versions
+    # Apple Silicon cannot build these, in it, it rather makes sense to default to Universal2 binaries
+    if [[ $(arch) == "arm64" ]]; then
+      package_option python configure --with-universal-archs=universal2
+    fi
+  fi
 fi
 
 # Compile with `--enable-unicode=ucs4` by default (#257)
